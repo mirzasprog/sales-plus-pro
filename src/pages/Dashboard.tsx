@@ -15,6 +15,8 @@ const Dashboard = () => {
     occupancyRate: 0,
   });
   const [storeData, setStoreData] = useState<any[]>([]);
+  const [formatData, setFormatData] = useState<any[]>([]);
+  const [displayTypeData, setDisplayTypeData] = useState<any[]>([]);
 
   useEffect(() => {
     fetchDashboardData();
@@ -27,7 +29,7 @@ const Dashboard = () => {
       // Fetch all positions
       const { data: positions, error } = await supabase
         .from("positions")
-        .select("store_id, status");
+        .select("store_id, status, format, display_type");
 
       if (error) throw error;
 
@@ -59,6 +61,54 @@ const Dashboard = () => {
       }));
 
       setStoreData(storeChartData);
+
+      // Group by format
+      const formatGroups = positions?.reduce((acc: any, pos) => {
+        const format = pos.format || "Nepoznato";
+        if (!acc[format]) {
+          acc[format] = { zauzeto: 0, slobodno: 0, total: 0 };
+        }
+        acc[format].total++;
+        if (pos.status === "occupied") {
+          acc[format].zauzeto++;
+        } else {
+          acc[format].slobodno++;
+        }
+        return acc;
+      }, {});
+
+      const formatChartData = Object.entries(formatGroups || {}).map(([name, data]: [string, any]) => ({
+        name,
+        zauzeto: data.zauzeto,
+        slobodno: data.slobodno,
+        procenat: data.total > 0 ? Math.round((data.zauzeto / data.total) * 100) : 0,
+      }));
+
+      setFormatData(formatChartData);
+
+      // Group by display type
+      const displayTypeGroups = positions?.reduce((acc: any, pos) => {
+        const displayType = pos.display_type || "Nepoznato";
+        if (!acc[displayType]) {
+          acc[displayType] = { zauzeto: 0, slobodno: 0, total: 0 };
+        }
+        acc[displayType].total++;
+        if (pos.status === "occupied") {
+          acc[displayType].zauzeto++;
+        } else {
+          acc[displayType].slobodno++;
+        }
+        return acc;
+      }, {});
+
+      const displayTypeChartData = Object.entries(displayTypeGroups || {}).map(([name, data]: [string, any]) => ({
+        name,
+        zauzeto: data.zauzeto,
+        slobodno: data.slobodno,
+        procenat: data.total > 0 ? Math.round((data.zauzeto / data.total) * 100) : 0,
+      }));
+
+      setDisplayTypeData(displayTypeChartData);
     } catch (error: any) {
       toast({
         variant: "destructive",
@@ -205,6 +255,46 @@ const Dashboard = () => {
                 <Legend />
                 <Line type="monotone" dataKey="zauzeto" stroke="hsl(var(--primary))" strokeWidth={2} />
               </LineChart>
+            </ResponsiveContainer>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Zauzetost po formatu</CardTitle>
+            <CardDescription>Raspodjela po tipovima formata</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <ResponsiveContainer width="100%" height={300}>
+              <BarChart data={formatData} layout="vertical">
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis type="number" />
+                <YAxis type="category" dataKey="name" width={100} />
+                <Tooltip />
+                <Legend />
+                <Bar dataKey="zauzeto" fill="hsl(var(--destructive))" name="Zauzeto" />
+                <Bar dataKey="slobodno" fill="hsl(var(--success))" name="Slobodno" />
+              </BarChart>
+            </ResponsiveContainer>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Zauzetost po tipu displeja</CardTitle>
+            <CardDescription>Raspodjela po tipovima displeja</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <ResponsiveContainer width="100%" height={300}>
+              <BarChart data={displayTypeData} layout="vertical">
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis type="number" />
+                <YAxis type="category" dataKey="name" width={100} />
+                <Tooltip />
+                <Legend />
+                <Bar dataKey="zauzeto" fill="hsl(var(--destructive))" name="Zauzeto" />
+                <Bar dataKey="slobodno" fill="hsl(var(--success))" name="Slobodno" />
+              </BarChart>
             </ResponsiveContainer>
           </CardContent>
         </Card>
