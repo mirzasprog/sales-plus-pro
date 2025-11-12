@@ -595,17 +595,25 @@ const Positions = () => {
       </div>
       </Card>
 
+      {/* Floor Plan Editor Dialog */}
+      <Dialog open={editorMode && selectedStore !== "all"} onOpenChange={(open) => setEditorMode(open)}>
+        <DialogContent className="max-w-[98vw] max-h-[98vh] w-full h-full p-0 overflow-hidden">
+          <div className="h-full w-full">
+            <FloorPlanEditor
+              storeId={selectedStore}
+              storeName={stores.find(s => s.id === selectedStore)?.name || ""}
+              onLayoutSaved={() => {
+                setEditorMode(false);
+                fetchPositions();
+              }}
+              stores={stores}
+            />
+          </div>
+        </DialogContent>
+      </Dialog>
+
       {/* Content */}
-      {editorMode && selectedStore !== "all" ? (
-        <Card className="p-3 md:p-6 flex-1 overflow-auto">
-          <FloorPlanEditor
-            storeId={selectedStore}
-            storeName={stores.find(s => s.id === selectedStore)?.name || ""}
-            onLayoutSaved={fetchPositions}
-            stores={stores}
-          />
-        </Card>
-      ) : (
+      {!(editorMode && selectedStore !== "all") && (
         <div className={`flex flex-col lg:flex-row gap-4 md:gap-6 flex-1 overflow-hidden`}>
           {/* Table */}
           <Card className={`overflow-auto ${showFloorPlan ? "lg:w-[40%]" : "w-full"}`}>

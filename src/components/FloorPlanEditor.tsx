@@ -365,7 +365,7 @@ export const FloorPlanEditor = ({ storeId, storeName, onLayoutSaved, stores = []
   }
 
   return (
-    <div className="flex flex-col gap-4 h-full">
+    <div className="flex flex-col gap-4 h-full p-4">
       {/* Toolbar */}
       <div className="flex flex-wrap gap-2 p-4 bg-card border rounded-lg">
         <Button onClick={() => setDimensionsDialogOpen(true)} variant="outline" size="sm">
