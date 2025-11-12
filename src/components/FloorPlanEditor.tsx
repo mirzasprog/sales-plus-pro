@@ -37,7 +37,8 @@ export const FloorPlanEditor = ({ storeId, storeName, onLayoutSaved, stores = []
   const [activeTool, setActiveTool] = useState<"select" | "wall" | "text">("select");
   const [storeWidthMm, setStoreWidthMm] = useState(16000);
   const [storeHeightMm, setStoreHeightMm] = useState(12000);
-  const [dimensionsDialogOpen, setDimensionsDialogOpen] = useState(true);
+  const [dimensionsDialogOpen, setDimensionsDialogOpen] = useState(false);
+  const [isLoadingLayout, setIsLoadingLayout] = useState(true);
   const [selectedObject, setSelectedObject] = useState<FabricObject | null>(null);
   const [detailsDialogOpen, setDetailsDialogOpen] = useState(false);
   const [equipmentDetails, setEquipmentDetails] = useState({
@@ -101,8 +102,44 @@ export const FloorPlanEditor = ({ storeId, storeName, onLayoutSaved, stores = []
     }
   };
 
+  // Check if layout exists first
   useEffect(() => {
-    if (!canvasRef.current || !isAdmin) return;
+    const checkExistingLayout = async () => {
+      try {
+        const { data, error } = await supabase
+          .from("floorplan_layouts")
+          .select("store_width, store_height")
+          .eq("store_id", storeId)
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        if (error) throw error;
+
+        if (data) {
+          // Layout exists, load dimensions
+          const widthMm = Number(data.store_width) / SCALE_FACTOR;
+          const heightMm = Number(data.store_height) / SCALE_FACTOR;
+          setStoreWidthMm(widthMm);
+          setStoreHeightMm(heightMm);
+          setDimensionsDialogOpen(false);
+        } else {
+          // No layout, show dimensions dialog
+          setDimensionsDialogOpen(true);
+        }
+      } catch (error) {
+        console.error("Error checking layout:", error);
+        setDimensionsDialogOpen(true);
+      } finally {
+        setIsLoadingLayout(false);
+      }
+    };
+
+    checkExistingLayout();
+  }, [storeId]);
+
+  useEffect(() => {
+    if (!canvasRef.current || !isAdmin || isLoadingLayout) return;
 
     const displayWidth = storeWidthMm * SCALE_FACTOR;
     const displayHeight = storeHeightMm * SCALE_FACTOR;
@@ -212,7 +249,7 @@ export const FloorPlanEditor = ({ storeId, storeName, onLayoutSaved, stores = []
     return () => {
       canvas.dispose();
     };
-  }, [storeWidthMm, storeHeightMm, isAdmin]);
+  }, [storeWidthMm, storeHeightMm, isAdmin, isLoadingLayout]);
 
   const loadExistingLayout = async () => {
     try {
