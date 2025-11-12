@@ -495,7 +495,9 @@ const FloorPlan = ({
 
         {/* Layout Elements from FloorPlanEditor */}
         {layoutElements.map((element, index) => {
-          if (element.type === "line") {
+          const elementType = (element.type || "").toLowerCase();
+          
+          if (elementType === "line") {
             // Wall/Line element
             return (
               <line
@@ -513,7 +515,7 @@ const FloorPlan = ({
                 }}
               />
             );
-          } else if (element.type === "i-text") {
+          } else if (elementType === "i-text" || elementType === "text" || elementType === "textbox") {
             // Text element
             return (
               <text
@@ -531,7 +533,7 @@ const FloorPlan = ({
                 {element.text}
               </text>
             );
-          } else if (element.type === "rect") {
+          } else if (elementType === "rect") {
             // Equipment/Rectangle element
             return (
               <g key={`layout-rect-${index}`}>
@@ -563,6 +565,24 @@ const FloorPlan = ({
                   </text>
                 )}
               </g>
+            );
+          } else if (elementType === "circle") {
+            // Circle element
+            return (
+              <circle
+                key={`layout-circle-${index}`}
+                cx={(element.left || 0) + (element.width || 0) / 2}
+                cy={(element.top || 0) + (element.height || 0) / 2}
+                r={(element.width || 50) / 2}
+                fill={element.fill || "hsl(var(--primary) / 0.3)"}
+                stroke={element.stroke || "hsl(var(--primary))"}
+                strokeWidth={element.strokeWidth || 2}
+                className="pointer-events-auto cursor-pointer hover:opacity-80 transition-opacity"
+                onDoubleClick={(e) => {
+                  e.stopPropagation();
+                  handleElementDoubleClick(element);
+                }}
+              />
             );
           }
           return null;
