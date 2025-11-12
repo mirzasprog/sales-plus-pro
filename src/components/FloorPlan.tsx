@@ -1,5 +1,9 @@
+import { useState, useRef } from "react";
 import { Position } from "@/pages/Positions";
 import { cn } from "@/lib/utils";
+import { supabase } from "@/integrations/supabase/client";
+import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/useAuth";
 
 interface FloorPlanProps {
   positions: Position[];
@@ -7,6 +11,7 @@ interface FloorPlanProps {
   selectedPosition: string | null;
   onPositionClick: (id: string) => void;
   onPositionHover: (id: string | null) => void;
+  onPositionsUpdate: () => void;
 }
 
 const FloorPlan = ({
@@ -15,10 +20,218 @@ const FloorPlan = ({
   selectedPosition,
   onPositionClick,
   onPositionHover,
+  onPositionsUpdate,
 }: FloorPlanProps) => {
+  const { toast } = useToast();
+  const { isAdmin } = useAuth();
+  const [draggingPosition, setDraggingPosition] = useState<string | null>(null);
+  const [resizingPosition, setResizingPosition] = useState<string | null>(null);
+  const [resizeHandle, setResizeHandle] = useState<"se" | "sw" | "ne" | "nw" | null>(null);
+  const [dragStart, setDragStart] = useState<{ x: number; y: number } | null>(null);
+  const [originalSize, setOriginalSize] = useState<{ width: number; height: number } | null>(null);
+  const svgRef = useRef<SVGSVGElement>(null);
+
+  const getSvgCoordinates = (e: React.MouseEvent<SVGSVGElement>) => {
+    if (!svgRef.current) return { x: 0, y: 0 };
+    const svg = svgRef.current;
+    const point = svg.createSVGPoint();
+    point.x = e.clientX;
+    point.y = e.clientY;
+    const svgPoint = point.matrixTransform(svg.getScreenCTM()?.inverse());
+    return { x: svgPoint.x, y: svgPoint.y };
+  };
+
+  const handleMouseDown = (e: React.MouseEvent<SVGSVGElement>, positionId: string, type: "drag" | "resize", handle?: "se" | "sw" | "ne" | "nw") => {
+    if (!isAdmin) return;
+    e.stopPropagation();
+    
+    const coords = getSvgCoordinates(e);
+    setDragStart(coords);
+
+    if (type === "drag") {
+      setDraggingPosition(positionId);
+    } else {
+      setResizingPosition(positionId);
+      setResizeHandle(handle || "se");
+      const position = positions.find((p) => p.id === positionId);
+      if (position) {
+        setOriginalSize({ width: Number(position.width), height: Number(position.height) });
+      }
+    }
+  };
+
+  const handleMouseMove = (e: React.MouseEvent<SVGSVGElement>) => {
+    if (!isAdmin || (!draggingPosition && !resizingPosition) || !dragStart) return;
+
+    const coords = getSvgCoordinates(e);
+    const dx = coords.x - dragStart.x;
+    const dy = coords.y - dragStart.y;
+
+    if (draggingPosition) {
+      const position = positions.find((p) => p.id === draggingPosition);
+      if (position) {
+        const newX = Math.max(20, Math.min(780 - Number(position.width), Number(position.x) + dx));
+        const newY = Math.max(20, Math.min(580 - Number(position.height), Number(position.y) + dy));
+        
+        // Update position temporarily in DOM
+        const rect = document.querySelector(`[data-position-id="${draggingPosition}"]`);
+        if (rect) {
+          rect.setAttribute("x", newX.toString());
+          rect.setAttribute("y", newY.toString());
+        }
+        const text = document.querySelector(`[data-position-text="${draggingPosition}"]`);
+        if (text) {
+          text.setAttribute("x", (newX + Number(position.width) / 2).toString());
+          text.setAttribute("y", (newY + Number(position.height) / 2).toString());
+        }
+      }
+    } else if (resizingPosition && originalSize) {
+      const position = positions.find((p) => p.id === resizingPosition);
+      if (position) {
+        let newWidth = originalSize.width;
+        let newHeight = originalSize.height;
+        let newX = Number(position.x);
+        let newY = Number(position.y);
+
+        if (resizeHandle === "se") {
+          newWidth = Math.max(50, originalSize.width + dx);
+          newHeight = Math.max(40, originalSize.height + dy);
+        } else if (resizeHandle === "sw") {
+          newWidth = Math.max(50, originalSize.width - dx);
+          newHeight = Math.max(40, originalSize.height + dy);
+          newX = Number(position.x) + dx;
+        } else if (resizeHandle === "ne") {
+          newWidth = Math.max(50, originalSize.width + dx);
+          newHeight = Math.max(40, originalSize.height - dy);
+          newY = Number(position.y) + dy;
+        } else if (resizeHandle === "nw") {
+          newWidth = Math.max(50, originalSize.width - dx);
+          newHeight = Math.max(40, originalSize.height - dy);
+          newX = Number(position.x) + dx;
+          newY = Number(position.y) + dy;
+        }
+
+        const rect = document.querySelector(`[data-position-id="${resizingPosition}"]`);
+        if (rect) {
+          rect.setAttribute("x", newX.toString());
+          rect.setAttribute("y", newY.toString());
+          rect.setAttribute("width", newWidth.toString());
+          rect.setAttribute("height", newHeight.toString());
+        }
+        const text = document.querySelector(`[data-position-text="${resizingPosition}"]`);
+        if (text) {
+          text.setAttribute("x", (newX + newWidth / 2).toString());
+          text.setAttribute("y", (newY + newHeight / 2).toString());
+        }
+      }
+    }
+  };
+
+  const handleMouseUp = async (e: React.MouseEvent<SVGSVGElement>) => {
+    if (!isAdmin || (!draggingPosition && !resizingPosition) || !dragStart) return;
+
+    const coords = getSvgCoordinates(e);
+    const dx = coords.x - dragStart.x;
+    const dy = coords.y - dragStart.y;
+
+    try {
+      if (draggingPosition) {
+        const position = positions.find((p) => p.id === draggingPosition);
+        if (position && (Math.abs(dx) > 1 || Math.abs(dy) > 1)) {
+          const newX = Math.max(20, Math.min(780 - Number(position.width), Number(position.x) + dx));
+          const newY = Math.max(20, Math.min(580 - Number(position.height), Number(position.y) + dy));
+
+          const { error } = await supabase
+            .from("positions")
+            .update({ x: newX, y: newY })
+            .eq("id", draggingPosition);
+
+          if (error) throw error;
+
+          toast({
+            title: "Pozicija ažurirana",
+            description: "Nova pozicija je spremljena",
+          });
+          onPositionsUpdate();
+        }
+      } else if (resizingPosition && originalSize) {
+        const position = positions.find((p) => p.id === resizingPosition);
+        if (position && (Math.abs(dx) > 1 || Math.abs(dy) > 1)) {
+          let newWidth = originalSize.width;
+          let newHeight = originalSize.height;
+          let newX = Number(position.x);
+          let newY = Number(position.y);
+
+          if (resizeHandle === "se") {
+            newWidth = Math.max(50, originalSize.width + dx);
+            newHeight = Math.max(40, originalSize.height + dy);
+          } else if (resizeHandle === "sw") {
+            newWidth = Math.max(50, originalSize.width - dx);
+            newHeight = Math.max(40, originalSize.height + dy);
+            newX = Number(position.x) + dx;
+          } else if (resizeHandle === "ne") {
+            newWidth = Math.max(50, originalSize.width + dx);
+            newHeight = Math.max(40, originalSize.height - dy);
+            newY = Number(position.y) + dy;
+          } else if (resizeHandle === "nw") {
+            newWidth = Math.max(50, originalSize.width - dx);
+            newHeight = Math.max(40, originalSize.height - dy);
+            newX = Number(position.x) + dx;
+            newY = Number(position.y) + dy;
+          }
+
+          const { error } = await supabase
+            .from("positions")
+            .update({ 
+              x: newX, 
+              y: newY,
+              width: newWidth, 
+              height: newHeight 
+            })
+            .eq("id", resizingPosition);
+
+          if (error) throw error;
+
+          toast({
+            title: "Dimenzije ažurirane",
+            description: "Nova veličina pozicije je spremljena",
+          });
+          onPositionsUpdate();
+        }
+      }
+    } catch (error: any) {
+      toast({
+        variant: "destructive",
+        title: "Greška",
+        description: error.message || "Nije moguće ažurirati poziciju",
+      });
+    } finally {
+      setDraggingPosition(null);
+      setResizingPosition(null);
+      setDragStart(null);
+      setOriginalSize(null);
+      setResizeHandle(null);
+    }
+  };
+
   return (
     <div className="relative w-full h-full min-h-[500px] bg-muted/20 rounded-lg overflow-hidden">
-      <svg width="100%" height="100%" viewBox="0 0 800 600" className="border border-border rounded-lg">
+      {isAdmin && (
+        <div className="absolute top-4 left-4 z-10 bg-primary/90 text-primary-foreground px-4 py-2 rounded-lg shadow-lg animate-fade-in">
+          <p className="text-sm font-semibold">🎯 Admin režim</p>
+          <p className="text-xs opacity-90">Prevuci pozicije ili promeni veličinu</p>
+        </div>
+      )}
+      <svg 
+        ref={svgRef}
+        width="100%" 
+        height="100%" 
+        viewBox="0 0 800 600" 
+        className="border border-border rounded-lg"
+        onMouseMove={handleMouseMove}
+        onMouseUp={handleMouseUp}
+        onMouseLeave={handleMouseUp}
+      >
         {/* Floor plan background grid */}
         <defs>
           <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
@@ -44,16 +257,13 @@ const FloorPlan = ({
           const isHovered = hoveredPosition === position.id;
           const isSelected = selectedPosition === position.id;
           const isOccupied = position.status === "occupied";
+          const isDragging = draggingPosition === position.id;
+          const isResizing = resizingPosition === position.id;
 
           return (
-            <g
-              key={position.id}
-              onMouseEnter={() => onPositionHover(position.id)}
-              onMouseLeave={() => onPositionHover(null)}
-              onClick={() => onPositionClick(position.id)}
-              className="cursor-pointer transition-all"
-            >
+            <g key={position.id}>
               <rect
+                data-position-id={position.id}
                 x={position.x}
                 y={position.y}
                 width={position.width}
@@ -62,19 +272,33 @@ const FloorPlan = ({
                 stroke={
                   isSelected
                     ? "hsl(var(--primary))"
-                    : isHovered
+                    : isHovered || isDragging
                     ? "hsl(var(--accent))"
                     : isOccupied
                     ? "hsl(var(--destructive))"
                     : "hsl(var(--success))"
                 }
-                strokeWidth={isSelected || isHovered ? "3" : "2"}
+                strokeWidth={isSelected || isHovered || isDragging ? "3" : "2"}
                 rx="4"
-                className="transition-all"
+                className={cn(
+                  "transition-all",
+                  isAdmin && "cursor-move",
+                  isDragging && "opacity-70"
+                )}
+                onMouseEnter={() => !isDragging && !isResizing && onPositionHover(position.id)}
+                onMouseLeave={() => !isDragging && !isResizing && onPositionHover(null)}
+                onClick={(e) => {
+                  if (!isDragging && !isResizing) {
+                    e.stopPropagation();
+                    onPositionClick(position.id);
+                  }
+                }}
+                onMouseDown={(e) => isAdmin && handleMouseDown(e as any, position.id, "drag")}
               />
               <text
-                x={position.x + position.width / 2}
-                y={position.y + position.height / 2}
+                data-position-text={position.id}
+                x={Number(position.x) + Number(position.width) / 2}
+                y={Number(position.y) + Number(position.height) / 2}
                 textAnchor="middle"
                 dominantBaseline="middle"
                 className="text-xs font-semibold pointer-events-none"
@@ -84,8 +308,8 @@ const FloorPlan = ({
               </text>
               {isOccupied && position.tenant && (
                 <text
-                  x={position.x + position.width / 2}
-                  y={position.y + position.height / 2 + 15}
+                  x={Number(position.x) + Number(position.width) / 2}
+                  y={Number(position.y) + Number(position.height) / 2 + 15}
                   textAnchor="middle"
                   dominantBaseline="middle"
                   className="text-[10px] pointer-events-none"
@@ -93,6 +317,56 @@ const FloorPlan = ({
                 >
                   {position.tenant}
                 </text>
+              )}
+              
+              {/* Resize handles for admin */}
+              {isAdmin && (isSelected || isHovered) && !isDragging && (
+                <>
+                  {/* SE handle */}
+                  <circle
+                    cx={Number(position.x) + Number(position.width)}
+                    cy={Number(position.y) + Number(position.height)}
+                    r="6"
+                    fill="hsl(var(--primary))"
+                    stroke="hsl(var(--background))"
+                    strokeWidth="2"
+                    className="cursor-se-resize hover:scale-125 transition-transform"
+                    onMouseDown={(e) => handleMouseDown(e as any, position.id, "resize", "se")}
+                  />
+                  {/* SW handle */}
+                  <circle
+                    cx={Number(position.x)}
+                    cy={Number(position.y) + Number(position.height)}
+                    r="6"
+                    fill="hsl(var(--primary))"
+                    stroke="hsl(var(--background))"
+                    strokeWidth="2"
+                    className="cursor-sw-resize hover:scale-125 transition-transform"
+                    onMouseDown={(e) => handleMouseDown(e as any, position.id, "resize", "sw")}
+                  />
+                  {/* NE handle */}
+                  <circle
+                    cx={Number(position.x) + Number(position.width)}
+                    cy={Number(position.y)}
+                    r="6"
+                    fill="hsl(var(--primary))"
+                    stroke="hsl(var(--background))"
+                    strokeWidth="2"
+                    className="cursor-ne-resize hover:scale-125 transition-transform"
+                    onMouseDown={(e) => handleMouseDown(e as any, position.id, "resize", "ne")}
+                  />
+                  {/* NW handle */}
+                  <circle
+                    cx={Number(position.x)}
+                    cy={Number(position.y)}
+                    r="6"
+                    fill="hsl(var(--primary))"
+                    stroke="hsl(var(--background))"
+                    strokeWidth="2"
+                    className="cursor-nw-resize hover:scale-125 transition-transform"
+                    onMouseDown={(e) => handleMouseDown(e as any, position.id, "resize", "nw")}
+                  />
+                </>
               )}
             </g>
           );

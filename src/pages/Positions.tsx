@@ -284,6 +284,7 @@ const Positions = () => {
                 }
               }}
               onPositionHover={setHoveredPosition}
+              onPositionsUpdate={fetchPositions}
             />
           </Card>
         )}
