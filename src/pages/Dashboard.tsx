@@ -1,56 +1,122 @@
+import { useEffect, useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, LineChart, Line } from "recharts";
-import { Building2, TrendingUp, AlertCircle, CheckCircle } from "lucide-react";
+import { Building2, TrendingUp, AlertCircle, CheckCircle, Loader2 } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
+import { useToast } from "@/hooks/use-toast";
 
 const Dashboard = () => {
-  // Mock data
-  const occupancyData = [
-    { name: "Prodavnica 001", zauzeto: 12, slobodno: 8 },
-    { name: "Prodavnica 002", zauzeto: 15, slobodno: 5 },
-    { name: "Prodavnica 003", zauzeto: 8, slobodno: 12 },
-    { name: "Prodavnica 004", zauzeto: 18, slobodno: 2 },
-    { name: "Prodavnica 005", zauzeto: 10, slobodno: 10 },
-  ];
+  const { toast } = useToast();
+  const [loading, setLoading] = useState(true);
+  const [stats, setStats] = useState({
+    total: 0,
+    occupied: 0,
+    free: 0,
+    occupancyRate: 0,
+  });
+  const [storeData, setStoreData] = useState<any[]>([]);
+
+  useEffect(() => {
+    fetchDashboardData();
+  }, []);
+
+  const fetchDashboardData = async () => {
+    try {
+      setLoading(true);
+
+      // Fetch all positions
+      const { data: positions, error } = await supabase
+        .from("positions")
+        .select("store_id, status");
+
+      if (error) throw error;
+
+      // Calculate stats
+      const total = positions?.length || 0;
+      const occupied = positions?.filter((p) => p.status === "occupied").length || 0;
+      const free = total - occupied;
+      const occupancyRate = total > 0 ? Math.round((occupied / total) * 100) : 0;
+
+      setStats({ total, occupied, free, occupancyRate });
+
+      // Group by store
+      const storeGroups = positions?.reduce((acc: any, pos) => {
+        if (!acc[pos.store_id]) {
+          acc[pos.store_id] = { zauzeto: 0, slobodno: 0 };
+        }
+        if (pos.status === "occupied") {
+          acc[pos.store_id].zauzeto++;
+        } else {
+          acc[pos.store_id].slobodno++;
+        }
+        return acc;
+      }, {});
+
+      const storeChartData = Object.entries(storeGroups || {}).map(([id, data]: [string, any]) => ({
+        name: `Prodavnica ${id}`,
+        zauzeto: data.zauzeto,
+        slobodno: data.slobodno,
+      }));
+
+      setStoreData(storeChartData);
+    } catch (error: any) {
+      toast({
+        variant: "destructive",
+        title: "Greška",
+        description: "Nije moguće učitati podatke",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const pieData = [
-    { name: "Zauzeto", value: 63, color: "hsl(var(--destructive))" },
-    { name: "Slobodno", value: 37, color: "hsl(var(--success))" },
+    { name: "Zauzeto", value: stats.occupied, color: "hsl(var(--destructive))" },
+    { name: "Slobodno", value: stats.free, color: "hsl(var(--success))" },
   ];
 
   const trendData = [
     { month: "Jan", zauzeto: 45 },
     { month: "Feb", zauzeto: 52 },
     { month: "Mar", zauzeto: 58 },
-    { month: "Apr", zauzeto: 63 },
-    { month: "Maj", zauzeto: 63 },
+    { month: "Apr", zauzeto: stats.occupied },
+    { month: "Maj", zauzeto: stats.occupied },
   ];
 
-  const stats = [
+  const statsCards = [
     {
       title: "Ukupno pozicija",
-      value: "100",
+      value: stats.total.toString(),
       icon: Building2,
       color: "text-primary",
     },
     {
       title: "Zauzeto",
-      value: "63",
+      value: stats.occupied.toString(),
       icon: AlertCircle,
       color: "text-destructive",
     },
     {
       title: "Slobodno",
-      value: "37",
+      value: stats.free.toString(),
       icon: CheckCircle,
       color: "text-success",
     },
     {
       title: "Stopa zauzetosti",
-      value: "63%",
+      value: `${stats.occupancyRate}%`,
       icon: TrendingUp,
       color: "text-primary",
     },
   ];
+
+  if (loading) {
+    return (
+      <div className="flex h-full items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6 p-6">
@@ -61,7 +127,7 @@ const Dashboard = () => {
 
       {/* Stats Grid */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        {stats.map((stat, index) => (
+        {statsCards.map((stat, index) => (
           <Card key={index}>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">{stat.title}</CardTitle>
@@ -83,7 +149,7 @@ const Dashboard = () => {
           </CardHeader>
           <CardContent>
             <ResponsiveContainer width="100%" height={300}>
-              <BarChart data={occupancyData}>
+              <BarChart data={storeData}>
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis dataKey="name" />
                 <YAxis />

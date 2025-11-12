@@ -80,7 +80,7 @@ const FloorPlan = ({
                 className="text-xs font-semibold pointer-events-none"
                 fill="hsl(var(--foreground))"
               >
-                {position.positionNumber}
+                {position.position_number}
               </text>
               {isOccupied && position.tenant && (
                 <text
