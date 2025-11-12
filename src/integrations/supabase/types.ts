@@ -38,6 +38,47 @@ export type Database = {
         }
         Relationships: []
       }
+      floorplan_layouts: {
+        Row: {
+          created_at: string
+          created_by: string
+          id: string
+          layout_data: Json
+          store_height: number
+          store_id: string
+          store_width: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by: string
+          id?: string
+          layout_data?: Json
+          store_height?: number
+          store_id: string
+          store_width?: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string
+          id?: string
+          layout_data?: Json
+          store_height?: number
+          store_id?: string
+          store_width?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "floorplan_layouts_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: false
+            referencedRelation: "stores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       position_history: {
         Row: {
           action: string

@@ -9,6 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Label } from "@/components/ui/label";
 import { Filter, Search, Loader2, Download, Undo2, Redo2, Upload, Plus, History } from "lucide-react";
 import FloorPlan from "@/components/FloorPlan";
+import { FloorPlanEditor } from "@/components/FloorPlanEditor";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
@@ -61,6 +62,7 @@ const Positions = () => {
   const [historyDialogOpen, setHistoryDialogOpen] = useState(false);
   const [detectionConfidence, setDetectionConfidence] = useState<number | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [editorMode, setEditorMode] = useState(false);
   
   const { undo, redo, canUndo, canRedo, history } = usePositionHistory(selectedStore);
 
@@ -523,33 +525,14 @@ const Positions = () => {
             {selectedStore !== "all" && (
               <>
                 <Button
-                  variant={createMode ? "default" : "outline"}
+                  variant={editorMode ? "default" : "outline"}
                   size="sm"
-                  onClick={() => setCreateMode(!createMode)}
+                  onClick={() => setEditorMode(!editorMode)}
                   className="w-full sm:w-auto"
                 >
                   <Plus className="h-4 w-4 mr-2" />
-                  {createMode ? "Otkaži kreiranje" : "Kreiraj poziciju"}
+                  {editorMode ? "Zatvori editor" : "Kreiraj nacrt"}
                 </Button>
-                
-                <div className="relative w-full sm:w-auto">
-                  <input
-                    type="file"
-                    accept="image/png,image/jpeg,image/jpg,image/svg+xml"
-                    onChange={handleImageUpload}
-                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                    disabled={uploadingImage || isAnalyzing}
-                  />
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={uploadingImage || isAnalyzing}
-                    className="w-full"
-                  >
-                    <Upload className="h-4 w-4 mr-2" />
-                    {uploadingImage || isAnalyzing ? "Učitavanje..." : "Učitaj floorplan"}
-                  </Button>
-                </div>
 
                 {backgroundImage && detectionConfidence !== null && (
                   <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 w-full sm:w-auto">
@@ -613,80 +596,91 @@ const Positions = () => {
       </Card>
 
       {/* Content */}
-      <div className={`flex flex-col lg:flex-row gap-4 md:gap-6 flex-1 overflow-hidden`}>
-        {/* Table */}
-        <Card className={`overflow-auto ${showFloorPlan ? "lg:w-[40%]" : "w-full"}`}>
-          <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="whitespace-nowrap">Status</TableHead>
-                  <TableHead className="whitespace-nowrap">Store ID</TableHead>
-                  <TableHead className="whitespace-nowrap">Broj</TableHead>
-                  <TableHead className="whitespace-nowrap">Format</TableHead>
-                  <TableHead className="whitespace-nowrap">Tip</TableHead>
-                  <TableHead className="whitespace-nowrap">Zakupac</TableHead>
-                  <TableHead className="whitespace-nowrap">Datum isteka</TableHead>
-                  <TableHead className="whitespace-nowrap">Odgovorna osoba</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredPositions.map((position) => (
-                  <TableRow
-                    key={position.id}
-                    className="cursor-pointer transition-colors"
-                    onMouseEnter={() => setHoveredPosition(position.id)}
-                    onMouseLeave={() => setHoveredPosition(null)}
-                    onClick={() => {
-                      setSelectedPosition(position);
-                      setEditDialogOpen(true);
-                    }}
-                  >
-                    <TableCell>
-                      <Badge variant={position.status === "free" ? "success" : "destructive"}>
-                        {position.status === "free" ? "Slobodno" : "Zauzeto"}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="font-medium">{position.store_id}</TableCell>
-                    <TableCell>{position.position_number}</TableCell>
-                    <TableCell>{position.format}</TableCell>
-                    <TableCell>{position.display_type}</TableCell>
-                    <TableCell>{position.tenant || "-"}</TableCell>
-                    <TableCell>
-                      {position.expiry_date ? format(new Date(position.expiry_date), "dd.MM.yyyy") : "-"}
-                    </TableCell>
-                    <TableCell>{position.responsible_person || "-"}</TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
+      {editorMode && selectedStore !== "all" ? (
+        <Card className="p-3 md:p-6 flex-1 overflow-auto">
+          <FloorPlanEditor
+            storeId={selectedStore}
+            storeName={stores.find(s => s.id === selectedStore)?.name || ""}
+            onLayoutSaved={fetchPositions}
+            stores={stores}
+          />
         </Card>
-
-        {/* Floor Plan */}
-        {showFloorPlan && (
-          <Card className="lg:w-[60%] p-3 md:p-6 overflow-auto min-h-[400px]">
-            <FloorPlan
-              positions={filteredPositions}
-              hoveredPosition={hoveredPosition}
-              selectedPosition={selectedPosition?.id || null}
-              onPositionClick={(id) => {
-                const pos = filteredPositions.find((p) => p.id === id);
-                if (pos) {
-                  setSelectedPosition(pos);
-                  setEditDialogOpen(true);
-                }
-              }}
-              onPositionHover={setHoveredPosition}
-              onPositionsUpdate={fetchPositions}
-              storeId={selectedStore}
-              backgroundImage={backgroundImage}
-              createMode={createMode}
-              onPositionCreate={handlePositionCreate}
-            />
+      ) : (
+        <div className={`flex flex-col lg:flex-row gap-4 md:gap-6 flex-1 overflow-hidden`}>
+          {/* Table */}
+          <Card className={`overflow-auto ${showFloorPlan ? "lg:w-[40%]" : "w-full"}`}>
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="whitespace-nowrap">Status</TableHead>
+                    <TableHead className="whitespace-nowrap">Store ID</TableHead>
+                    <TableHead className="whitespace-nowrap">Broj</TableHead>
+                    <TableHead className="whitespace-nowrap">Format</TableHead>
+                    <TableHead className="whitespace-nowrap">Tip</TableHead>
+                    <TableHead className="whitespace-nowrap">Zakupac</TableHead>
+                    <TableHead className="whitespace-nowrap">Datum isteka</TableHead>
+                    <TableHead className="whitespace-nowrap">Odgovorna osoba</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filteredPositions.map((position) => (
+                    <TableRow
+                      key={position.id}
+                      className="cursor-pointer transition-colors"
+                      onMouseEnter={() => setHoveredPosition(position.id)}
+                      onMouseLeave={() => setHoveredPosition(null)}
+                      onClick={() => {
+                        setSelectedPosition(position);
+                        setEditDialogOpen(true);
+                      }}
+                    >
+                      <TableCell>
+                        <Badge variant={position.status === "free" ? "success" : "destructive"}>
+                          {position.status === "free" ? "Slobodno" : "Zauzeto"}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="font-medium">{position.store_id}</TableCell>
+                      <TableCell>{position.position_number}</TableCell>
+                      <TableCell>{position.format}</TableCell>
+                      <TableCell>{position.display_type}</TableCell>
+                      <TableCell>{position.tenant || "-"}</TableCell>
+                      <TableCell>
+                        {position.expiry_date ? format(new Date(position.expiry_date), "dd.MM.yyyy") : "-"}
+                      </TableCell>
+                      <TableCell>{position.responsible_person || "-"}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
           </Card>
-        )}
-      </div>
+
+          {/* Floor Plan */}
+          {showFloorPlan && (
+            <Card className="lg:w-[60%] p-3 md:p-6 overflow-auto min-h-[400px]">
+              <FloorPlan
+                positions={filteredPositions}
+                hoveredPosition={hoveredPosition}
+                selectedPosition={selectedPosition?.id || null}
+                onPositionClick={(id) => {
+                  const pos = filteredPositions.find((p) => p.id === id);
+                  if (pos) {
+                    setSelectedPosition(pos);
+                    setEditDialogOpen(true);
+                  }
+                }}
+                onPositionHover={setHoveredPosition}
+                onPositionsUpdate={fetchPositions}
+                storeId={selectedStore}
+                backgroundImage={backgroundImage}
+                createMode={createMode}
+                onPositionCreate={handlePositionCreate}
+              />
+            </Card>
+          )}
+        </div>
+      )}
 
       {/* Create Position Dialog */}
       <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
