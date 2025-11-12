@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Canvas as FabricCanvas, Line, Rect, FabricText, Circle, FabricObject } from "fabric";
+import { Canvas as FabricCanvas, Line, Rect, FabricText, Circle, FabricObject, ActiveSelection } from "fabric";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -7,7 +7,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
-import { Save, Trash2, Download, Copy } from "lucide-react";
+import { Save, Trash2, Copy, Undo, Redo, Type, ZoomIn, ZoomOut, Square } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 
 interface FloorPlanEditorProps {
@@ -18,20 +18,23 @@ interface FloorPlanEditorProps {
 }
 
 const EQUIPMENT_TYPES = [
-  { id: "cooler", label: "Rashladna vitrina", color: "#60a5fa", width: 120, height: 60 },
-  { id: "shelf", label: "Polica", color: "#34d399", width: 100, height: 40 },
-  { id: "fridge", label: "Frižider", color: "#a78bfa", width: 80, height: 80 },
-  { id: "gondola", label: "Gondola", color: "#fbbf24", width: 150, height: 50 },
-  { id: "checkout", label: "Kasa", color: "#f87171", width: 90, height: 60 },
-  { id: "entrance", label: "Ulaz", color: "#8b5cf6", width: 100, height: 30 },
+  { id: "cooler", label: "Rashladna vitrina", color: "#60a5fa", width: 1200, height: 600 },
+  { id: "shelf", label: "Polica", color: "#34d399", width: 1000, height: 400 },
+  { id: "fridge", label: "Frižider", color: "#a78bfa", width: 800, height: 800 },
+  { id: "gondola", label: "Gondola", color: "#fbbf24", width: 1500, height: 500 },
+  { id: "checkout", label: "Kasa", color: "#f87171", width: 900, height: 600 },
+  { id: "entrance", label: "Ulaz", color: "#8b5cf6", width: 1000, height: 300 },
 ];
+
+const SCALE_FACTOR = 0.05; // 1mm = 0.05px for display
 
 export const FloorPlanEditor = ({ storeId, storeName, onLayoutSaved, stores = [] }: FloorPlanEditorProps) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [fabricCanvas, setFabricCanvas] = useState<FabricCanvas | null>(null);
   const [isDrawingWall, setIsDrawingWall] = useState(false);
-  const [storeWidth, setStoreWidth] = useState(800);
-  const [storeHeight, setStoreHeight] = useState(600);
+  const [activeTool, setActiveTool] = useState<"select" | "wall" | "text">("select");
+  const [storeWidthMm, setStoreWidthMm] = useState(16000);
+  const [storeHeightMm, setStoreHeightMm] = useState(12000);
   const [dimensionsDialogOpen, setDimensionsDialogOpen] = useState(true);
   const [selectedObject, setSelectedObject] = useState<FabricObject | null>(null);
   const [detailsDialogOpen, setDetailsDialogOpen] = useState(false);
@@ -45,24 +48,39 @@ export const FloorPlanEditor = ({ storeId, storeName, onLayoutSaved, stores = []
     purpose: "",
     department: "",
     category: "",
+    width_mm: "",
+    length_mm: "",
+    height_mm: "",
+    depth_mm: "",
+    x_position: "",
+    y_position: "",
   });
   const [copyDialogOpen, setCopyDialogOpen] = useState(false);
   const [targetStoreId, setTargetStoreId] = useState<string>("");
+  const [history, setHistory] = useState<string[]>([]);
+  const [historyStep, setHistoryStep] = useState(-1);
+  const [zoom, setZoom] = useState(1);
+  const wallLineRef = useRef<Line | null>(null);
+  const wallStartPoint = useRef<{ x: number; y: number } | null>(null);
   const { toast } = useToast();
   const { user, isAdmin } = useAuth();
 
   useEffect(() => {
     if (!canvasRef.current || !isAdmin) return;
 
+    const displayWidth = storeWidthMm * SCALE_FACTOR;
+    const displayHeight = storeHeightMm * SCALE_FACTOR;
+
     const canvas = new FabricCanvas(canvasRef.current, {
-      width: storeWidth,
-      height: storeHeight,
+      width: displayWidth,
+      height: displayHeight,
       backgroundColor: "#ffffff",
     });
 
     setFabricCanvas(canvas);
     loadExistingLayout();
 
+    // Selection events
     canvas.on("selection:created", (e) => {
       if (e.selected && e.selected[0]) {
         setSelectedObject(e.selected[0]);
@@ -79,10 +97,29 @@ export const FloorPlanEditor = ({ storeId, storeName, onLayoutSaved, stores = []
       setSelectedObject(null);
     });
 
+    // Mouse wheel zoom
+    canvas.on("mouse:wheel", (opt) => {
+      const delta = opt.e.deltaY;
+      let newZoom = canvas.getZoom();
+      newZoom *= 0.999 ** delta;
+      if (newZoom > 5) newZoom = 5;
+      if (newZoom < 0.2) newZoom = 0.2;
+      const pointer = canvas.getPointer(opt.e);
+      canvas.zoomToPoint(pointer, newZoom);
+      setZoom(newZoom);
+      opt.e.preventDefault();
+      opt.e.stopPropagation();
+    });
+
+    // Save to history after object modification
+    canvas.on("object:modified", () => {
+      saveHistory();
+    });
+
     return () => {
       canvas.dispose();
     };
-  }, [storeWidth, storeHeight, isAdmin]);
+  }, [storeWidthMm, storeHeightMm, isAdmin]);
 
   const loadExistingLayout = async () => {
     try {
@@ -97,14 +134,17 @@ export const FloorPlanEditor = ({ storeId, storeName, onLayoutSaved, stores = []
       if (error) throw error;
 
       if (data && fabricCanvas) {
-        setStoreWidth(Number(data.store_width));
-        setStoreHeight(Number(data.store_height));
+        const widthMm = Number(data.store_width) / SCALE_FACTOR;
+        const heightMm = Number(data.store_height) / SCALE_FACTOR;
+        setStoreWidthMm(widthMm);
+        setStoreHeightMm(heightMm);
         
         if (data.layout_data && typeof data.layout_data === 'object') {
           const layoutData = data.layout_data as any;
           if (layoutData.objects) {
             fabricCanvas.loadFromJSON(layoutData, () => {
               fabricCanvas.renderAll();
+              saveHistory();
             });
           }
         }
@@ -114,24 +154,60 @@ export const FloorPlanEditor = ({ storeId, storeName, onLayoutSaved, stores = []
     }
   };
 
+  const saveHistory = () => {
+    if (!fabricCanvas) return;
+    const json = JSON.stringify(fabricCanvas.toJSON());
+    const newHistory = history.slice(0, historyStep + 1);
+    newHistory.push(json);
+    setHistory(newHistory);
+    setHistoryStep(newHistory.length - 1);
+  };
+
+  const undo = () => {
+    if (historyStep > 0 && fabricCanvas) {
+      const prevStep = historyStep - 1;
+      const prevState = history[prevStep];
+      fabricCanvas.loadFromJSON(JSON.parse(prevState), () => {
+        fabricCanvas.renderAll();
+      });
+      setHistoryStep(prevStep);
+    }
+  };
+
+  const redo = () => {
+    if (historyStep < history.length - 1 && fabricCanvas) {
+      const nextStep = historyStep + 1;
+      const nextState = history[nextStep];
+      fabricCanvas.loadFromJSON(JSON.parse(nextState), () => {
+        fabricCanvas.renderAll();
+      });
+      setHistoryStep(nextStep);
+    }
+  };
+
   const handleSetDimensions = () => {
     setDimensionsDialogOpen(false);
     if (fabricCanvas) {
-      fabricCanvas.setWidth(storeWidth);
-      fabricCanvas.setHeight(storeHeight);
+      const displayWidth = storeWidthMm * SCALE_FACTOR;
+      const displayHeight = storeHeightMm * SCALE_FACTOR;
+      fabricCanvas.setWidth(displayWidth);
+      fabricCanvas.setHeight(displayHeight);
       drawStoreBoundary();
+      saveHistory();
     }
   };
 
   const drawStoreBoundary = () => {
     if (!fabricCanvas) return;
 
-    // Draw boundary rectangle
+    const displayWidth = storeWidthMm * SCALE_FACTOR;
+    const displayHeight = storeHeightMm * SCALE_FACTOR;
+
     const boundary = new Rect({
       left: 10,
       top: 10,
-      width: storeWidth - 20,
-      height: storeHeight - 20,
+      width: displayWidth - 20,
+      height: displayHeight - 20,
       fill: "transparent",
       stroke: "#000000",
       strokeWidth: 3,
@@ -143,45 +219,100 @@ export const FloorPlanEditor = ({ storeId, storeName, onLayoutSaved, stores = []
     fabricCanvas.renderAll();
   };
 
-  const addWall = () => {
+  const startWallDrawing = () => {
     if (!fabricCanvas) return;
-    setIsDrawingWall(!isDrawingWall);
+    
+    setActiveTool("wall");
+    fabricCanvas.isDrawingMode = false;
+    fabricCanvas.selection = false;
+    fabricCanvas.forEachObject((obj) => {
+      obj.selectable = false;
+    });
 
-    if (!isDrawingWall) {
-      toast({
-        title: "Režim crtanja zida",
-        description: "Klikni dvaput na canvas za kreiranje zida",
+    toast({
+      title: "Režim crtanja zida",
+      description: "Klikni i prevuci mišem za crtanje zida",
+    });
+
+    const handleMouseDown = (opt: any) => {
+      if (activeTool !== "wall") return;
+      const pointer = fabricCanvas.getPointer(opt.e);
+      wallStartPoint.current = { x: pointer.x, y: pointer.y };
+      
+      const line = new Line([pointer.x, pointer.y, pointer.x, pointer.y], {
+        stroke: "#1e293b",
+        strokeWidth: 4,
+        selectable: false,
       });
+      wallLineRef.current = line;
+      fabricCanvas.add(line);
+    };
 
-      let startPoint: { x: number; y: number } | null = null;
-      const handleClick = (e: any) => {
-        const pointer = fabricCanvas.getPointer(e.e);
+    const handleMouseMove = (opt: any) => {
+      if (!wallStartPoint.current || !wallLineRef.current) return;
+      const pointer = fabricCanvas.getPointer(opt.e);
+      wallLineRef.current.set({
+        x2: pointer.x,
+        y2: pointer.y,
+      });
+      fabricCanvas.renderAll();
+    };
 
-        if (!startPoint) {
-          startPoint = { x: pointer.x, y: pointer.y };
-        } else {
-          const line = new Line([startPoint.x, startPoint.y, pointer.x, pointer.y], {
-            stroke: "#1e293b",
-            strokeWidth: 4,
-            selectable: true,
-          });
-          fabricCanvas.add(line);
-          startPoint = null;
-        }
-      };
+    const handleMouseUp = () => {
+      if (wallLineRef.current) {
+        wallLineRef.current.selectable = true;
+        saveHistory();
+      }
+      wallStartPoint.current = null;
+      wallLineRef.current = null;
+    };
 
-      fabricCanvas.on("mouse:down", handleClick);
-    }
+    fabricCanvas.on("mouse:down", handleMouseDown);
+    fabricCanvas.on("mouse:move", handleMouseMove);
+    fabricCanvas.on("mouse:up", handleMouseUp);
+  };
+
+  const stopDrawing = () => {
+    if (!fabricCanvas) return;
+    setActiveTool("select");
+    fabricCanvas.isDrawingMode = false;
+    fabricCanvas.selection = true;
+    fabricCanvas.forEachObject((obj) => {
+      obj.selectable = true;
+    });
+    fabricCanvas.off("mouse:down");
+    fabricCanvas.off("mouse:move");
+    fabricCanvas.off("mouse:up");
+  };
+
+  const addText = () => {
+    if (!fabricCanvas) return;
+    
+    const text = new FabricText("Tekst", {
+      left: 100,
+      top: 100,
+      fontSize: 20,
+      fill: "#000000",
+      selectable: true,
+    });
+
+    fabricCanvas.add(text);
+    fabricCanvas.setActiveObject(text);
+    fabricCanvas.renderAll();
+    saveHistory();
   };
 
   const addEquipment = (type: typeof EQUIPMENT_TYPES[0]) => {
     if (!fabricCanvas) return;
 
+    const displayWidth = type.width * SCALE_FACTOR;
+    const displayHeight = type.height * SCALE_FACTOR;
+
     const equipment = new Rect({
       left: 100,
       top: 100,
-      width: type.width,
-      height: type.height,
+      width: displayWidth,
+      height: displayHeight,
       fill: type.color,
       stroke: "#000000",
       strokeWidth: 2,
@@ -189,8 +320,8 @@ export const FloorPlanEditor = ({ storeId, storeName, onLayoutSaved, stores = []
     });
 
     const label = new FabricText(type.label, {
-      left: 100 + type.width / 2,
-      top: 100 + type.height / 2,
+      left: 100 + displayWidth / 2,
+      top: 100 + displayHeight / 2,
       fontSize: 12,
       fill: "#000000",
       originX: "center",
@@ -199,23 +330,47 @@ export const FloorPlanEditor = ({ storeId, storeName, onLayoutSaved, stores = []
       evented: false,
     });
 
-    (equipment as any).customData = { type: type.id, label: type.label };
+    (equipment as any).customData = { 
+      type: type.id, 
+      label: type.label,
+      width_mm: type.width,
+      length_mm: type.height,
+    };
 
     fabricCanvas.add(equipment);
     fabricCanvas.add(label);
     fabricCanvas.renderAll();
+    saveHistory();
 
     // Link text to rectangle
     equipment.on("moving", () => {
       label.set({
-        left: (equipment.left || 0) + type.width / 2,
-        top: (equipment.top || 0) + type.height / 2,
+        left: (equipment.left || 0) + displayWidth / 2,
+        top: (equipment.top || 0) + displayHeight / 2,
+      });
+    });
+
+    equipment.on("scaling", () => {
+      label.set({
+        left: (equipment.left || 0) + (displayWidth * (equipment.scaleX || 1)) / 2,
+        top: (equipment.top || 0) + (displayHeight * (equipment.scaleY || 1)) / 2,
       });
     });
   };
 
   const handleObjectDoubleClick = () => {
     if (selectedObject && selectedObject.type === "rect") {
+      const objData = (selectedObject as any).customData || {};
+      const currentWidth = ((selectedObject.width || 100) * (selectedObject.scaleX || 1)) / SCALE_FACTOR;
+      const currentHeight = ((selectedObject.height || 80) * (selectedObject.scaleY || 1)) / SCALE_FACTOR;
+      
+      setEquipmentDetails({
+        ...equipmentDetails,
+        width_mm: objData.width_mm?.toString() || currentWidth.toFixed(0),
+        length_mm: objData.length_mm?.toString() || currentHeight.toFixed(0),
+        x_position: ((selectedObject.left || 0) / SCALE_FACTOR).toFixed(0),
+        y_position: ((selectedObject.top || 0) / SCALE_FACTOR).toFixed(0),
+      });
       setDetailsDialogOpen(true);
     }
   };
@@ -225,16 +380,37 @@ export const FloorPlanEditor = ({ storeId, storeName, onLayoutSaved, stores = []
 
     const objData = (selectedObject as any).customData || {};
     
+    // Update canvas object with new dimensions if provided
+    if (equipmentDetails.width_mm && equipmentDetails.length_mm) {
+      const newWidth = Number(equipmentDetails.width_mm) * SCALE_FACTOR;
+      const newHeight = Number(equipmentDetails.length_mm) * SCALE_FACTOR;
+      selectedObject.set({
+        width: newWidth,
+        height: newHeight,
+        scaleX: 1,
+        scaleY: 1,
+      });
+      fabricCanvas?.renderAll();
+    }
+
+    if (equipmentDetails.x_position && equipmentDetails.y_position) {
+      selectedObject.set({
+        left: Number(equipmentDetails.x_position) * SCALE_FACTOR,
+        top: Number(equipmentDetails.y_position) * SCALE_FACTOR,
+      });
+      fabricCanvas?.renderAll();
+    }
+    
     try {
       const { error } = await supabase.from("positions").upsert({
         store_id: storeId,
         position_number: equipmentDetails.position_number,
         format: equipmentDetails.format || objData.label || "Oprema",
         display_type: equipmentDetails.display_type || "Podna",
-        x: selectedObject.left || 0,
-        y: selectedObject.top || 0,
-        width: selectedObject.width || 100,
-        height: selectedObject.height || 80,
+        x: (selectedObject.left || 0) / SCALE_FACTOR,
+        y: (selectedObject.top || 0) / SCALE_FACTOR,
+        width: ((selectedObject.width || 100) * (selectedObject.scaleX || 1)) / SCALE_FACTOR,
+        height: ((selectedObject.height || 80) * (selectedObject.scaleY || 1)) / SCALE_FACTOR,
         status: equipmentDetails.status,
         tenant: equipmentDetails.tenant,
         expiry_date: equipmentDetails.expiry_date || null,
@@ -263,7 +439,14 @@ export const FloorPlanEditor = ({ storeId, storeName, onLayoutSaved, stores = []
         purpose: "",
         department: "",
         category: "",
+        width_mm: "",
+        length_mm: "",
+        height_mm: "",
+        depth_mm: "",
+        x_position: "",
+        y_position: "",
       });
+      saveHistory();
     } catch (error: any) {
       toast({
         variant: "destructive",
@@ -278,14 +461,16 @@ export const FloorPlanEditor = ({ storeId, storeName, onLayoutSaved, stores = []
 
     try {
       const layoutData = fabricCanvas.toJSON();
+      const displayWidth = storeWidthMm * SCALE_FACTOR;
+      const displayHeight = storeHeightMm * SCALE_FACTOR;
 
       const { error } = await supabase
         .from("floorplan_layouts")
         .upsert({
           store_id: storeId,
           layout_data: layoutData,
-          store_width: storeWidth,
-          store_height: storeHeight,
+          store_width: displayWidth,
+          store_height: displayHeight,
           created_by: user.id,
         });
 
@@ -323,14 +508,16 @@ export const FloorPlanEditor = ({ storeId, storeName, onLayoutSaved, stores = []
 
     try {
       const layoutData = fabricCanvas.toJSON();
+      const displayWidth = storeWidthMm * SCALE_FACTOR;
+      const displayHeight = storeHeightMm * SCALE_FACTOR;
 
       const { error } = await supabase
         .from("floorplan_layouts")
         .insert({
           store_id: targetStoreId,
           layout_data: layoutData,
-          store_width: storeWidth,
-          store_height: storeHeight,
+          store_width: displayWidth,
+          store_height: displayHeight,
           created_by: user.id,
         });
 
@@ -353,9 +540,38 @@ export const FloorPlanEditor = ({ storeId, storeName, onLayoutSaved, stores = []
   };
 
   const deleteSelected = () => {
-    if (!fabricCanvas || !selectedObject) return;
-    fabricCanvas.remove(selectedObject);
-    fabricCanvas.renderAll();
+    if (!fabricCanvas) return;
+    const activeObjects = fabricCanvas.getActiveObjects();
+    if (activeObjects.length > 0) {
+      activeObjects.forEach((obj) => fabricCanvas.remove(obj));
+      fabricCanvas.discardActiveObject();
+      fabricCanvas.renderAll();
+      saveHistory();
+    }
+  };
+
+  const selectAll = () => {
+    if (!fabricCanvas) return;
+    const allObjects = fabricCanvas.getObjects().filter((obj) => obj.selectable !== false);
+    if (allObjects.length > 0) {
+      const selection = new ActiveSelection(allObjects, { canvas: fabricCanvas });
+      fabricCanvas.setActiveObject(selection);
+      fabricCanvas.renderAll();
+    }
+  };
+
+  const handleZoomIn = () => {
+    if (!fabricCanvas) return;
+    const newZoom = Math.min(zoom * 1.2, 5);
+    fabricCanvas.setZoom(newZoom);
+    setZoom(newZoom);
+  };
+
+  const handleZoomOut = () => {
+    if (!fabricCanvas) return;
+    const newZoom = Math.max(zoom / 1.2, 0.2);
+    fabricCanvas.setZoom(newZoom);
+    setZoom(newZoom);
   };
 
   if (!isAdmin) {
@@ -370,14 +586,34 @@ export const FloorPlanEditor = ({ storeId, storeName, onLayoutSaved, stores = []
     <div className="flex flex-col gap-4 h-full p-4">
       {/* Toolbar */}
       <div className="flex flex-wrap gap-2 p-4 bg-card border rounded-lg">
-        <Button onClick={() => setDimensionsDialogOpen(true)} variant="outline" size="sm">
-          Dimenzije objekta
-        </Button>
-        <Button onClick={addWall} variant={isDrawingWall ? "default" : "outline"} size="sm">
-          Nacrtaj zid
-        </Button>
+        <div className="flex gap-2 items-center border-r pr-2">
+          <Button onClick={() => setDimensionsDialogOpen(true)} variant="outline" size="sm">
+            Dimenzije
+          </Button>
+          <Button onClick={undo} variant="outline" size="sm" disabled={historyStep <= 0}>
+            <Undo className="h-4 w-4" />
+          </Button>
+          <Button onClick={redo} variant="outline" size="sm" disabled={historyStep >= history.length - 1}>
+            <Redo className="h-4 w-4" />
+          </Button>
+        </div>
+
+        <div className="flex gap-2 items-center border-r pr-2">
+          <Button 
+            onClick={activeTool === "wall" ? stopDrawing : startWallDrawing} 
+            variant={activeTool === "wall" ? "default" : "outline"} 
+            size="sm"
+          >
+            <Square className="h-4 w-4 mr-1" />
+            Zid
+          </Button>
+          <Button onClick={addText} variant="outline" size="sm">
+            <Type className="h-4 w-4 mr-1" />
+            Tekst
+          </Button>
+        </div>
         
-        <div className="flex gap-1 flex-wrap">
+        <div className="flex gap-1 flex-wrap border-r pr-2">
           {EQUIPMENT_TYPES.map((type) => (
             <Button
               key={type.id}
@@ -391,7 +627,20 @@ export const FloorPlanEditor = ({ storeId, storeName, onLayoutSaved, stores = []
           ))}
         </div>
 
+        <div className="flex gap-2 items-center border-r pr-2">
+          <Button onClick={handleZoomOut} variant="outline" size="sm">
+            <ZoomOut className="h-4 w-4" />
+          </Button>
+          <span className="text-sm text-muted-foreground">{(zoom * 100).toFixed(0)}%</span>
+          <Button onClick={handleZoomIn} variant="outline" size="sm">
+            <ZoomIn className="h-4 w-4" />
+          </Button>
+        </div>
+
         <div className="ml-auto flex gap-2">
+          <Button onClick={selectAll} variant="outline" size="sm">
+            Označi sve
+          </Button>
           <Button onClick={deleteSelected} variant="outline" size="sm" disabled={!selectedObject}>
             <Trash2 className="h-4 w-4" />
           </Button>
@@ -422,23 +671,23 @@ export const FloorPlanEditor = ({ storeId, storeName, onLayoutSaved, stores = []
           </DialogHeader>
           <div className="space-y-4">
             <div className="space-y-2">
-              <Label>Širina (px)</Label>
+              <Label>Širina objekta (mm)</Label>
               <Input
                 type="number"
-                value={storeWidth}
-                onChange={(e) => setStoreWidth(Number(e.target.value))}
-                min={400}
-                max={2000}
+                value={storeWidthMm}
+                onChange={(e) => setStoreWidthMm(Number(e.target.value))}
+                min={1000}
+                max={50000}
               />
             </div>
             <div className="space-y-2">
-              <Label>Visina (px)</Label>
+              <Label>Dužina objekta (mm)</Label>
               <Input
                 type="number"
-                value={storeHeight}
-                onChange={(e) => setStoreHeight(Number(e.target.value))}
-                min={400}
-                max={2000}
+                value={storeHeightMm}
+                onChange={(e) => setStoreHeightMm(Number(e.target.value))}
+                min={1000}
+                max={50000}
               />
             </div>
             <Button onClick={handleSetDimensions} className="w-full">
@@ -469,6 +718,60 @@ export const FloorPlanEditor = ({ storeId, storeName, onLayoutSaved, stores = []
                 <Input
                   value={equipmentDetails.format}
                   onChange={(e) => setEquipmentDetails({ ...equipmentDetails, format: e.target.value })}
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-4 gap-4">
+              <div className="space-y-2">
+                <Label>Širina (mm)</Label>
+                <Input
+                  type="number"
+                  value={equipmentDetails.width_mm}
+                  onChange={(e) => setEquipmentDetails({ ...equipmentDetails, width_mm: e.target.value })}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Dužina (mm)</Label>
+                <Input
+                  type="number"
+                  value={equipmentDetails.length_mm}
+                  onChange={(e) => setEquipmentDetails({ ...equipmentDetails, length_mm: e.target.value })}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Visina (mm)</Label>
+                <Input
+                  type="number"
+                  value={equipmentDetails.height_mm}
+                  onChange={(e) => setEquipmentDetails({ ...equipmentDetails, height_mm: e.target.value })}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Dubina (mm)</Label>
+                <Input
+                  type="number"
+                  value={equipmentDetails.depth_mm}
+                  onChange={(e) => setEquipmentDetails({ ...equipmentDetails, depth_mm: e.target.value })}
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>X Pozicija (mm)</Label>
+                <Input
+                  type="number"
+                  value={equipmentDetails.x_position}
+                  onChange={(e) => setEquipmentDetails({ ...equipmentDetails, x_position: e.target.value })}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Y Pozicija (mm)</Label>
+                <Input
+                  type="number"
+                  value={equipmentDetails.y_position}
+                  onChange={(e) => setEquipmentDetails({ ...equipmentDetails, y_position: e.target.value })}
                 />
               </div>
             </div>
