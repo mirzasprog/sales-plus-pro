@@ -4,6 +4,44 @@ import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+
+interface LayoutElement {
+  type: string;
+  left?: number;
+  top?: number;
+  width?: number;
+  height?: number;
+  x1?: number;
+  y1?: number;
+  x2?: number;
+  y2?: number;
+  text?: string;
+  fontSize?: number;
+  fill?: string;
+  stroke?: string;
+  strokeWidth?: number;
+  position_number?: string;
+  format?: string;
+  display_type?: string;
+  department?: string;
+  category?: string;
+  purpose?: string;
+  status?: string;
+  tenant?: string;
+  responsible_person?: string;
+  nearest_person?: string;
+  expiry_date?: string;
+  width_mm?: number;
+  length_mm?: number;
+  height_mm?: number;
+  depth_mm?: number;
+  x_position?: number;
+  y_position?: number;
+}
 
 interface FloorPlanProps {
   positions: Position[];
@@ -40,6 +78,142 @@ const FloorPlan = ({
   const [dragStart, setDragStart] = useState<{ x: number; y: number } | null>(null);
   const [originalSize, setOriginalSize] = useState<{ width: number; height: number } | null>(null);
   const svgRef = useRef<SVGSVGElement>(null);
+  const [layoutElements, setLayoutElements] = useState<LayoutElement[]>([]);
+  const [selectedElement, setSelectedElement] = useState<LayoutElement | null>(null);
+  const [detailsDialogOpen, setDetailsDialogOpen] = useState(false);
+  const [elementDetails, setElementDetails] = useState<any>({});
+  const SCALE_FACTOR = 0.05; // 1mm = 0.05px
+
+  // Load layout data from database
+  useEffect(() => {
+    const loadLayout = async () => {
+      try {
+        const { data, error } = await supabase
+          .from("floorplan_layouts")
+          .select("*")
+          .eq("store_id", storeId)
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .single();
+
+        if (error && error.code !== "PGRST116") throw error;
+        
+        if (data && data.layout_data) {
+          const layoutData = data.layout_data as any;
+          const objects = layoutData.objects || [];
+          setLayoutElements(objects);
+        }
+      } catch (error: any) {
+        console.error("Error loading layout:", error);
+      }
+    };
+
+    if (storeId) {
+      loadLayout();
+    }
+  }, [storeId]);
+
+  const handleElementDoubleClick = (element: LayoutElement) => {
+    if (!isAdmin) return;
+    setSelectedElement(element);
+    setElementDetails({
+      position_number: element.position_number || "",
+      format: element.format || "",
+      display_type: element.display_type || "",
+      department: element.department || "",
+      category: element.category || "",
+      purpose: element.purpose || "",
+      status: element.status || "free",
+      tenant: element.tenant || "",
+      responsible_person: element.responsible_person || "",
+      nearest_person: element.nearest_person || "",
+      expiry_date: element.expiry_date || "",
+      width_mm: element.width_mm || 0,
+      length_mm: element.length_mm || 0,
+      height_mm: element.height_mm || 0,
+      depth_mm: element.depth_mm || 0,
+      x_position: element.x_position || element.left || 0,
+      y_position: element.y_position || element.top || 0,
+    });
+    setDetailsDialogOpen(true);
+  };
+
+  const saveElementDetails = async () => {
+    if (!selectedElement) return;
+
+    try {
+      // Update element in layout
+      const updatedElements = layoutElements.map((el) => {
+        if (el === selectedElement) {
+          return {
+            ...el,
+            ...elementDetails,
+            left: elementDetails.x_position,
+            top: elementDetails.y_position,
+            width: (elementDetails.width_mm || 0) * SCALE_FACTOR,
+            height: (elementDetails.length_mm || 0) * SCALE_FACTOR,
+          };
+        }
+        return el;
+      });
+
+      // Save to database
+      const { error: layoutError } = await supabase
+        .from("floorplan_layouts")
+        .update({
+          layout_data: { objects: updatedElements },
+          updated_at: new Date().toISOString(),
+        })
+        .eq("store_id", storeId);
+
+      if (layoutError) throw layoutError;
+
+      // If element has position_number, also update positions table
+      if (elementDetails.position_number) {
+        const { error: posError } = await supabase
+          .from("positions")
+          .upsert({
+            store_id: storeId,
+            position_number: elementDetails.position_number,
+            format: elementDetails.format,
+            display_type: elementDetails.display_type,
+            department: elementDetails.department,
+            category: elementDetails.category,
+            purpose: elementDetails.purpose,
+            status: elementDetails.status,
+            tenant: elementDetails.tenant,
+            responsible_person: elementDetails.responsible_person,
+            nearest_person: elementDetails.nearest_person,
+            expiry_date: elementDetails.expiry_date || null,
+            x: elementDetails.x_position,
+            y: elementDetails.y_position,
+            width: (elementDetails.width_mm || 0) * SCALE_FACTOR,
+            height: (elementDetails.length_mm || 0) * SCALE_FACTOR,
+          }, {
+            onConflict: "store_id,position_number"
+          });
+
+        if (posError) throw posError;
+      }
+
+      setLayoutElements(updatedElements);
+      setDetailsDialogOpen(false);
+      setSelectedElement(null);
+      
+      toast({
+        title: "Detalji sačuvani",
+        description: "Atributi elementa su uspješno ažurirani",
+      });
+      
+      onPositionsUpdate();
+    } catch (error: any) {
+      toast({
+        variant: "destructive",
+        title: "Greška",
+        description: error.message || "Nije moguće sačuvati detalje",
+      });
+    }
+  };
 
   const getSvgCoordinates = (e: React.MouseEvent<SVGSVGElement>) => {
     if (!svgRef.current) return { x: 0, y: 0 };
@@ -319,6 +493,81 @@ const FloorPlan = ({
           rx="4"
         />
 
+        {/* Layout Elements from FloorPlanEditor */}
+        {layoutElements.map((element, index) => {
+          if (element.type === "line") {
+            // Wall/Line element
+            return (
+              <line
+                key={`layout-line-${index}`}
+                x1={element.x1}
+                y1={element.y1}
+                x2={element.x2}
+                y2={element.y2}
+                stroke={element.stroke || "hsl(var(--foreground))"}
+                strokeWidth={element.strokeWidth || 2}
+                className="pointer-events-auto"
+                onDoubleClick={(e) => {
+                  e.stopPropagation();
+                  handleElementDoubleClick(element);
+                }}
+              />
+            );
+          } else if (element.type === "i-text") {
+            // Text element
+            return (
+              <text
+                key={`layout-text-${index}`}
+                x={element.left}
+                y={element.top}
+                fontSize={element.fontSize || 14}
+                fill={element.fill || "hsl(var(--foreground))"}
+                className="pointer-events-auto cursor-pointer"
+                onDoubleClick={(e) => {
+                  e.stopPropagation();
+                  handleElementDoubleClick(element);
+                }}
+              >
+                {element.text}
+              </text>
+            );
+          } else if (element.type === "rect") {
+            // Equipment/Rectangle element
+            return (
+              <g key={`layout-rect-${index}`}>
+                <rect
+                  x={element.left}
+                  y={element.top}
+                  width={element.width}
+                  height={element.height}
+                  fill={element.fill || "hsl(var(--primary) / 0.3)"}
+                  stroke={element.stroke || "hsl(var(--primary))"}
+                  strokeWidth={element.strokeWidth || 2}
+                  rx="4"
+                  className="pointer-events-auto cursor-pointer hover:opacity-80 transition-opacity"
+                  onDoubleClick={(e) => {
+                    e.stopPropagation();
+                    handleElementDoubleClick(element);
+                  }}
+                />
+                {element.position_number && (
+                  <text
+                    x={(element.left || 0) + (element.width || 0) / 2}
+                    y={(element.top || 0) + (element.height || 0) / 2}
+                    textAnchor="middle"
+                    dominantBaseline="middle"
+                    className="text-xs font-semibold pointer-events-none"
+                    fill="hsl(var(--foreground))"
+                  >
+                    {element.position_number}
+                  </text>
+                )}
+              </g>
+            );
+          }
+          return null;
+        })}
+
         {/* Positions */}
         {positions.map((position) => {
           const isHovered = hoveredPosition === position.id;
@@ -439,6 +688,183 @@ const FloorPlan = ({
           );
         })}
       </svg>
+
+      {/* Element Details Dialog */}
+      <Dialog open={detailsDialogOpen} onOpenChange={setDetailsDialogOpen}>
+        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Detalji Elementa</DialogTitle>
+          </DialogHeader>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <Label>Broj pozicije</Label>
+              <Input
+                value={elementDetails.position_number || ""}
+                onChange={(e) =>
+                  setElementDetails({ ...elementDetails, position_number: e.target.value })
+                }
+              />
+            </div>
+            <div>
+              <Label>Format</Label>
+              <Input
+                value={elementDetails.format || ""}
+                onChange={(e) =>
+                  setElementDetails({ ...elementDetails, format: e.target.value })
+                }
+              />
+            </div>
+            <div>
+              <Label>Tip displeja</Label>
+              <Input
+                value={elementDetails.display_type || ""}
+                onChange={(e) =>
+                  setElementDetails({ ...elementDetails, display_type: e.target.value })
+                }
+              />
+            </div>
+            <div>
+              <Label>Odjeljenje</Label>
+              <Input
+                value={elementDetails.department || ""}
+                onChange={(e) =>
+                  setElementDetails({ ...elementDetails, department: e.target.value })
+                }
+              />
+            </div>
+            <div>
+              <Label>Kategorija</Label>
+              <Input
+                value={elementDetails.category || ""}
+                onChange={(e) =>
+                  setElementDetails({ ...elementDetails, category: e.target.value })
+                }
+              />
+            </div>
+            <div>
+              <Label>Svrha</Label>
+              <Input
+                value={elementDetails.purpose || ""}
+                onChange={(e) =>
+                  setElementDetails({ ...elementDetails, purpose: e.target.value })
+                }
+              />
+            </div>
+            <div>
+              <Label>Status</Label>
+              <Input
+                value={elementDetails.status || ""}
+                onChange={(e) =>
+                  setElementDetails({ ...elementDetails, status: e.target.value })
+                }
+              />
+            </div>
+            <div>
+              <Label>Zakupac</Label>
+              <Input
+                value={elementDetails.tenant || ""}
+                onChange={(e) =>
+                  setElementDetails({ ...elementDetails, tenant: e.target.value })
+                }
+              />
+            </div>
+            <div>
+              <Label>Odgovorna osoba</Label>
+              <Input
+                value={elementDetails.responsible_person || ""}
+                onChange={(e) =>
+                  setElementDetails({ ...elementDetails, responsible_person: e.target.value })
+                }
+              />
+            </div>
+            <div>
+              <Label>Najbliža osoba</Label>
+              <Input
+                value={elementDetails.nearest_person || ""}
+                onChange={(e) =>
+                  setElementDetails({ ...elementDetails, nearest_person: e.target.value })
+                }
+              />
+            </div>
+            <div>
+              <Label>Datum isteka</Label>
+              <Input
+                type="date"
+                value={elementDetails.expiry_date || ""}
+                onChange={(e) =>
+                  setElementDetails({ ...elementDetails, expiry_date: e.target.value })
+                }
+              />
+            </div>
+            <div>
+              <Label>Širina (mm)</Label>
+              <Input
+                type="number"
+                value={elementDetails.width_mm || ""}
+                onChange={(e) =>
+                  setElementDetails({ ...elementDetails, width_mm: parseFloat(e.target.value) || 0 })
+                }
+              />
+            </div>
+            <div>
+              <Label>Dužina (mm)</Label>
+              <Input
+                type="number"
+                value={elementDetails.length_mm || ""}
+                onChange={(e) =>
+                  setElementDetails({ ...elementDetails, length_mm: parseFloat(e.target.value) || 0 })
+                }
+              />
+            </div>
+            <div>
+              <Label>Visina (mm)</Label>
+              <Input
+                type="number"
+                value={elementDetails.height_mm || ""}
+                onChange={(e) =>
+                  setElementDetails({ ...elementDetails, height_mm: parseFloat(e.target.value) || 0 })
+                }
+              />
+            </div>
+            <div>
+              <Label>Dubina (mm)</Label>
+              <Input
+                type="number"
+                value={elementDetails.depth_mm || ""}
+                onChange={(e) =>
+                  setElementDetails({ ...elementDetails, depth_mm: parseFloat(e.target.value) || 0 })
+                }
+              />
+            </div>
+            <div>
+              <Label>X Pozicija</Label>
+              <Input
+                type="number"
+                value={elementDetails.x_position || ""}
+                onChange={(e) =>
+                  setElementDetails({ ...elementDetails, x_position: parseFloat(e.target.value) || 0 })
+                }
+              />
+            </div>
+            <div>
+              <Label>Y Pozicija</Label>
+              <Input
+                type="number"
+                value={elementDetails.y_position || ""}
+                onChange={(e) =>
+                  setElementDetails({ ...elementDetails, y_position: parseFloat(e.target.value) || 0 })
+                }
+              />
+            </div>
+          </div>
+          <div className="flex justify-end gap-2 mt-4">
+            <Button variant="outline" onClick={() => setDetailsDialogOpen(false)}>
+              Otkaži
+            </Button>
+            <Button onClick={saveElementDetails}>Sačuvaj</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Legend */}
       <div className="absolute bottom-2 right-2 md:bottom-4 md:right-4 bg-card border border-border rounded-lg p-2 md:p-3 shadow-lg">
