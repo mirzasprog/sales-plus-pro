@@ -374,26 +374,43 @@ const Positions = () => {
     if (!selectedPosition) return;
 
     try {
-      const updateData: any = {
-        tenant: selectedPosition.tenant,
-        expiry_date: selectedPosition.expiry_date,
-      };
+      // Update status based on tenant if admin is editing
+      if (isAdmin) {
+        const updateData = {
+          ...selectedPosition,
+          responsible_person: selectedPosition.tenant && selectedPosition.tenant.trim() !== "" 
+            ? (selectedPosition.responsible_person || user?.email || "")
+            : "",
+        };
 
-      // Update status based on tenant
-      if (selectedPosition.tenant && selectedPosition.tenant.trim() !== "") {
-        updateData.status = "occupied";
-        updateData.responsible_person = user?.email || "";
+        const { error } = await supabase
+          .from("positions")
+          .update(updateData)
+          .eq("id", selectedPosition.id);
+
+        if (error) throw error;
       } else {
-        updateData.status = "free";
-        updateData.responsible_person = "";
+        // Non-admin can only update tenant and expiry_date
+        const updateData: any = {
+          tenant: selectedPosition.tenant,
+          expiry_date: selectedPosition.expiry_date,
+        };
+
+        if (selectedPosition.tenant && selectedPosition.tenant.trim() !== "") {
+          updateData.status = "occupied";
+          updateData.responsible_person = user?.email || "";
+        } else {
+          updateData.status = "free";
+          updateData.responsible_person = "";
+        }
+
+        const { error } = await supabase
+          .from("positions")
+          .update(updateData)
+          .eq("id", selectedPosition.id);
+
+        if (error) throw error;
       }
-
-      const { error } = await supabase
-        .from("positions")
-        .update(updateData)
-        .eq("id", selectedPosition.id);
-
-      if (error) throw error;
 
       toast({
         title: "Uspešno ažurirano",
@@ -746,19 +763,94 @@ const Positions = () => {
 
       {/* Edit Dialog */}
       <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
-        <DialogContent>
+        <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Uređivanje pozicije {selectedPosition?.position_number}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <Label>Store ID</Label>
-              <Input value={selectedPosition?.store_id || ""} disabled />
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Broj pozicije</Label>
+                <Input 
+                  value={selectedPosition?.position_number || ""} 
+                  onChange={(e) => setSelectedPosition(prev => prev ? {...prev, position_number: e.target.value} : null)}
+                  disabled={!isAdmin}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Store ID</Label>
+                <Input value={selectedPosition?.store_id || ""} disabled />
+              </div>
             </div>
-            <div className="space-y-2">
-              <Label>Format</Label>
-              <Input value={selectedPosition?.format || ""} disabled />
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Format</Label>
+                <Input 
+                  value={selectedPosition?.format || ""} 
+                  onChange={(e) => setSelectedPosition(prev => prev ? {...prev, format: e.target.value} : null)}
+                  disabled={!isAdmin}
+                  placeholder="npr. Polica 120cm"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Tip displeja</Label>
+                <Input 
+                  value={selectedPosition?.display_type || ""} 
+                  onChange={(e) => setSelectedPosition(prev => prev ? {...prev, display_type: e.target.value} : null)}
+                  disabled={!isAdmin}
+                  placeholder="npr. Zidni"
+                />
+              </div>
             </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Status</Label>
+                <Select 
+                  value={selectedPosition?.status || "free"} 
+                  onValueChange={(value) => setSelectedPosition(prev => prev ? {...prev, status: value} : null)}
+                  disabled={!isAdmin}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="free">Slobodno</SelectItem>
+                    <SelectItem value="occupied">Zauzeto</SelectItem>
+                    <SelectItem value="partially">Djelimično zauzeto</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>Namjena</Label>
+                <Input 
+                  value={selectedPosition?.purpose || ""} 
+                  onChange={(e) => setSelectedPosition(prev => prev ? {...prev, purpose: e.target.value} : null)}
+                  placeholder="npr. Promocija"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Odjel</Label>
+                <Input 
+                  value={selectedPosition?.department || ""} 
+                  onChange={(e) => setSelectedPosition(prev => prev ? {...prev, department: e.target.value} : null)}
+                  placeholder="npr. Hrana"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Kategorija</Label>
+                <Input 
+                  value={selectedPosition?.category || ""} 
+                  onChange={(e) => setSelectedPosition(prev => prev ? {...prev, category: e.target.value} : null)}
+                  placeholder="npr. Sokovi"
+                />
+              </div>
+            </div>
+
             <div className="space-y-2">
               <Label>Zakupac</Label>
               <Input
@@ -768,8 +860,10 @@ const Positions = () => {
                     prev ? { ...prev, tenant: e.target.value } : null
                   )
                 }
+                placeholder="Ime zakupca"
               />
             </div>
+
             <div className="space-y-2">
               <Label>Datum isteka</Label>
               <Input
@@ -782,16 +876,70 @@ const Positions = () => {
                 }
               />
             </div>
-            <div className="space-y-2">
-              <Label>Odgovorna osoba</Label>
-              <Input
-                value={selectedPosition?.responsible_person || ""}
-                disabled
-              />
-              <p className="text-sm text-muted-foreground">
-                Automatski se postavlja na osnovu prijavljenog korisnika
-              </p>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Najbliža osoba</Label>
+                <Input 
+                  value={selectedPosition?.nearest_person || ""} 
+                  onChange={(e) => setSelectedPosition(prev => prev ? {...prev, nearest_person: e.target.value} : null)}
+                  placeholder="Ime osobe"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Odgovorna osoba</Label>
+                <Input
+                  value={selectedPosition?.responsible_person || ""}
+                  onChange={(e) => setSelectedPosition(prev => prev ? {...prev, responsible_person: e.target.value} : null)}
+                  disabled={!isAdmin}
+                  placeholder="Automatski se postavlja"
+                />
+              </div>
             </div>
+
+            {isAdmin && (
+              <>
+                <div className="border-t pt-4">
+                  <p className="text-sm font-medium mb-3">Dimenzije i pozicija</p>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label>Pozicija X</Label>
+                      <Input 
+                        type="number"
+                        value={selectedPosition?.x || 0} 
+                        onChange={(e) => setSelectedPosition(prev => prev ? {...prev, x: Number(e.target.value)} : null)}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Pozicija Y</Label>
+                      <Input 
+                        type="number"
+                        value={selectedPosition?.y || 0} 
+                        onChange={(e) => setSelectedPosition(prev => prev ? {...prev, y: Number(e.target.value)} : null)}
+                      />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4 mt-4">
+                    <div className="space-y-2">
+                      <Label>Širina</Label>
+                      <Input 
+                        type="number"
+                        value={selectedPosition?.width || 100} 
+                        onChange={(e) => setSelectedPosition(prev => prev ? {...prev, width: Number(e.target.value)} : null)}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Visina</Label>
+                      <Input 
+                        type="number"
+                        value={selectedPosition?.height || 80} 
+                        onChange={(e) => setSelectedPosition(prev => prev ? {...prev, height: Number(e.target.value)} : null)}
+                      />
+                    </div>
+                  </div>
+                </div>
+              </>
+            )}
           </div>
           <div className="flex justify-end gap-2">
             <Button variant="outline" onClick={() => setEditDialogOpen(false)}>
