@@ -147,111 +147,82 @@ export const FloorPlanEditor = ({ storeId, storeName, onLayoutSaved, stores = []
     const canvas = new FabricCanvas(canvasRef.current, {
       width: displayWidth,
       height: displayHeight,
-      backgroundColor: "#ffffff",
+      backgroundColor: "#f8f9fa",
     });
 
-    // Nacrtaj grid
-    drawGrid(canvas, displayWidth, displayHeight);
-
-    setFabricCanvas(canvas);
-    loadExistingLayout();
-
-    // Selection events
-    canvas.on("selection:created", (e) => {
-      if (e.selected && e.selected[0]) {
-        setSelectedObject(e.selected[0]);
-      }
+    canvas.on('selection:created', (e) => {
+      const activeObject = e.selected?.[0];
+      setSelectedObject(activeObject || null);
     });
 
-    canvas.on("selection:updated", (e) => {
-      if (e.selected && e.selected[0]) {
-        setSelectedObject(e.selected[0]);
-      }
+    canvas.on('selection:updated', (e) => {
+      const activeObject = e.selected?.[0];
+      setSelectedObject(activeObject || null);
     });
 
-    canvas.on("selection:cleared", () => {
+    canvas.on('selection:cleared', () => {
       setSelectedObject(null);
     });
 
-    // Mouse wheel zoom
-    canvas.on("mouse:wheel", (opt) => {
-      const delta = opt.e.deltaY;
-      let newZoom = canvas.getZoom();
-      newZoom *= 0.999 ** delta;
-      if (newZoom > 5) newZoom = 5;
-      if (newZoom < 0.2) newZoom = 0.2;
-      const pointer = canvas.getPointer(opt.e);
-      canvas.zoomToPoint(pointer, newZoom);
-      setZoom(newZoom);
-      opt.e.preventDefault();
-      opt.e.stopPropagation();
+    canvas.on('object:modified', (e) => {
+      console.log('Object modified:', e.target);
     });
 
-    // Save to history after object modification
-    canvas.on("object:modified", () => {
-      saveHistory();
+    canvas.on('mouse:down', (e) => {
+      if (!e.target) {
+        canvas.discardActiveObject();
+        canvas.renderAll();
+        return;
+      }
+
+      if (e.target.type === 'rect' || e.target.type === 'Rect') {
+        canvas.setActiveObject(e.target);
+        canvas.renderAll();
+      }
     });
 
-    // Event listener za double click - otvara detalje
-    canvas.on("mouse:dblclick", (e) => {
-      if (e.target && e.target.type !== 'line') {
-        const target = e.target;
-        setSelectedObject(target);
-        
-        const objData = (target as any).customData || {};
-        const currentWidth = ((target.width || 100) * (target.scaleX || 1)) / SCALE_FACTOR;
-        const currentHeight = ((target.height || 80) * (target.scaleY || 1)) / SCALE_FACTOR;
+    canvas.on('mouse:dblclick', (e) => {
+      if (e.target && e.target.type === 'rect') {
+        setSelectedObject(e.target);
+        const objData = (e.target as any).customData || {};
+        const currentWidth = ((e.target.width || 100) * (e.target.scaleX || 1)) / SCALE_FACTOR;
+        const currentHeight = ((e.target.height || 80) * (e.target.scaleY || 1)) / SCALE_FACTOR;
         
         setEquipmentDetails({
-          position_number: (target as any).position_number || "",
-          format: (target as any).format || "",
-          display_type: (target as any).display_type || "",
-          tenant: (target as any).tenant || "",
-          expiry_date: (target as any).expiry_date || "",
-          status: (target as any).status || "free",
-          purpose: (target as any).purpose || "",
-          department: (target as any).department || "",
-          category: (target as any).category || "",
+          position_number: (e.target as any).position_number || '',
+          format: (e.target as any).format || '',
+          display_type: (e.target as any).display_type || '',
+          tenant: (e.target as any).tenant || '',
+          expiry_date: (e.target as any).expiry_date || '',
+          status: (e.target as any).status || 'free',
+          purpose: (e.target as any).purpose || '',
+          department: (e.target as any).department || '',
+          category: (e.target as any).category || '',
           width_mm: objData.width_mm?.toString() || currentWidth.toFixed(0),
           length_mm: objData.length_mm?.toString() || currentHeight.toFixed(0),
-          height_mm: (target as any).height_mm?.toString() || "",
-          depth_mm: (target as any).depth_mm?.toString() || "",
-          x_position: ((target.left || 0) / SCALE_FACTOR).toFixed(0),
-          y_position: ((target.top || 0) / SCALE_FACTOR).toFixed(0),
+          height_mm: (e.target as any).height_mm?.toString() || '',
+          depth_mm: (e.target as any).depth_mm?.toString() || '',
+          x_position: ((e.target.left || 0) / SCALE_FACTOR).toFixed(0),
+          y_position: ((e.target.top || 0) / SCALE_FACTOR).toFixed(0),
         });
         setDetailsDialogOpen(true);
       }
     });
 
-    // Event listener za snap-to-grid kada se objekat pomera
-    canvas.on("object:moving", (e) => {
-      const obj = e.target;
-      if (obj && obj.type !== 'line') {
-        obj.set({
-          left: snapToGrid(obj.left || 0),
-          top: snapToGrid(obj.top || 0),
-        });
-      }
-    });
+    setFabricCanvas(canvas);
 
-    // Event listener za snap-to-grid kada se objekat dodaje
-    canvas.on("object:added", (e) => {
-      const obj = e.target;
-      if (obj && obj.type !== 'line') {
-        obj.set({
-          left: snapToGrid(obj.left || 0),
-          top: snapToGrid(obj.top || 0),
-        });
-        canvas.renderAll();
-      }
-    });
+    // Load existing layout after canvas is initialized
+    loadExistingLayout(canvas);
 
     return () => {
       canvas.dispose();
     };
   }, [storeWidthMm, storeHeightMm, isAdmin, isLoadingLayout]);
 
-  const loadExistingLayout = async () => {
+  const loadExistingLayout = async (canvas?: FabricCanvas) => {
+    const targetCanvas = canvas || fabricCanvas;
+    if (!targetCanvas) return;
+
     try {
       const { data, error } = await supabase
         .from("floorplan_layouts")
@@ -263,18 +234,17 @@ export const FloorPlanEditor = ({ storeId, storeName, onLayoutSaved, stores = []
 
       if (error) throw error;
 
-      if (data && fabricCanvas) {
-        const widthMm = Number(data.store_width) / SCALE_FACTOR;
-        const heightMm = Number(data.store_height) / SCALE_FACTOR;
-        setStoreWidthMm(widthMm);
-        setStoreHeightMm(heightMm);
-        
-        if (data.layout_data && typeof data.layout_data === 'object') {
+      if (data && data.layout_data) {
+        if (typeof data.layout_data === 'object') {
           const layoutData = data.layout_data as any;
-          if (layoutData.objects) {
-            fabricCanvas.loadFromJSON(layoutData, () => {
-              fabricCanvas.renderAll();
+          if (layoutData.objects && layoutData.objects.length > 0) {
+            targetCanvas.loadFromJSON(layoutData, () => {
+              targetCanvas.renderAll();
               saveHistory();
+              toast({
+                title: "Layout učitan",
+                description: "Postojeći nacrt je učitan sa svim elementima",
+              });
             });
           }
         }

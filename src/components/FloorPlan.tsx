@@ -508,8 +508,8 @@ const FloorPlan = ({
                 y2={element.y2}
                 stroke={element.stroke || "hsl(var(--foreground))"}
                 strokeWidth={element.strokeWidth || 2}
-                className="pointer-events-auto"
-                onDoubleClick={(e) => {
+                className="pointer-events-auto cursor-pointer hover:opacity-70 transition-opacity"
+                onClick={(e) => {
                   e.stopPropagation();
                   handleElementDoubleClick(element);
                 }}
@@ -524,8 +524,8 @@ const FloorPlan = ({
                 y={element.top}
                 fontSize={element.fontSize || 14}
                 fill={element.fill || "hsl(var(--foreground))"}
-                className="pointer-events-auto cursor-pointer"
-                onDoubleClick={(e) => {
+                className="pointer-events-auto cursor-pointer hover:opacity-70 transition-opacity"
+                onClick={(e) => {
                   e.stopPropagation();
                   handleElementDoubleClick(element);
                 }}
@@ -547,7 +547,7 @@ const FloorPlan = ({
                   strokeWidth={element.strokeWidth || 2}
                   rx="4"
                   className="pointer-events-auto cursor-pointer hover:opacity-80 transition-opacity"
-                  onDoubleClick={(e) => {
+                  onClick={(e) => {
                     e.stopPropagation();
                     handleElementDoubleClick(element);
                   }}
@@ -578,7 +578,7 @@ const FloorPlan = ({
                 stroke={element.stroke || "hsl(var(--primary))"}
                 strokeWidth={element.strokeWidth || 2}
                 className="pointer-events-auto cursor-pointer hover:opacity-80 transition-opacity"
-                onDoubleClick={(e) => {
+                onClick={(e) => {
                   e.stopPropagation();
                   handleElementDoubleClick(element);
                 }}
