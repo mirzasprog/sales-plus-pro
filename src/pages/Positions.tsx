@@ -439,17 +439,17 @@ const Positions = () => {
   }
 
   return (
-    <div className="flex flex-col h-[calc(100vh-4rem)] p-6 gap-6">
+    <div className="flex flex-col h-full min-h-screen p-3 md:p-6 gap-4 md:gap-6 pt-16 md:pt-6">
       <div>
-        <h1 className="text-3xl font-bold tracking-tight">Pozicije</h1>
-        <p className="text-muted-foreground">Upravljanje dodatnim prodajnim pozicijama</p>
+        <h1 className="text-2xl md:text-3xl font-bold tracking-tight">Pozicije</h1>
+        <p className="text-sm md:text-base text-muted-foreground">Upravljanje dodatnim prodajnim pozicijama</p>
       </div>
 
       {/* Filters and Actions */}
-      <Card className="p-4">
-        <div className="flex flex-wrap gap-4 items-center justify-between">
-          <div className="flex flex-wrap gap-4 items-center flex-1">
-          <div className="flex-1 min-w-[200px]">
+      <Card className="p-3 md:p-4">
+        <div className="flex flex-col gap-3 md:gap-4">
+          {/* Search */}
+          <div className="w-full">
             <div className="relative">
               <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
               <Input
@@ -461,54 +461,60 @@ const Positions = () => {
             </div>
           </div>
           
-          <Select value={selectedStore} onValueChange={setSelectedStore}>
-            <SelectTrigger className="w-[180px]">
-              <SelectValue placeholder="Prodavnica" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Sve prodavnice</SelectItem>
-              {stores.map((store) => (
-                <SelectItem key={store.id} value={store.id}>
-                  {store.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          {/* Store selector and filters */}
+          <div className="flex flex-col sm:flex-row gap-3 w-full">
+            <Select value={selectedStore} onValueChange={setSelectedStore}>
+              <SelectTrigger className="w-full sm:w-[180px]">
+                <SelectValue placeholder="Prodavnica" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Sve prodavnice</SelectItem>
+                {stores.map((store) => (
+                  <SelectItem key={store.id} value={store.id}>
+                    {store.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
 
-          <div className="flex gap-2">
-            <Button
-              variant={filter === "all" ? "default" : "outline"}
-              size="sm"
-              onClick={() => setFilter("all")}
-            >
-              <Filter className="h-4 w-4 mr-2" />
-              Sve
-            </Button>
-            <Button
-              variant={filter === "occupied" ? "default" : "outline"}
-              size="sm"
-              onClick={() => setFilter("occupied")}
-            >
-              Zauzeto
-            </Button>
-            <Button
-              variant={filter === "free" ? "default" : "outline"}
-              size="sm"
-              onClick={() => setFilter("free")}
-            >
-              Slobodno
-            </Button>
+            <div className="flex gap-2 flex-wrap">
+              <Button
+                variant={filter === "all" ? "default" : "outline"}
+                size="sm"
+                onClick={() => setFilter("all")}
+                className="flex-1 sm:flex-none"
+              >
+                <Filter className="h-4 w-4 mr-2" />
+                Sve
+              </Button>
+              <Button
+                variant={filter === "occupied" ? "default" : "outline"}
+                size="sm"
+                onClick={() => setFilter("occupied")}
+                className="flex-1 sm:flex-none"
+              >
+                Zauzeto
+              </Button>
+              <Button
+                variant={filter === "free" ? "default" : "outline"}
+                size="sm"
+                onClick={() => setFilter("free")}
+                className="flex-1 sm:flex-none"
+              >
+                Slobodno
+              </Button>
           </div>
         </div>
 
-        {/* Admin Actions */}
+         {/* Admin Actions */}
         {isAdmin && (
-          <div className="flex flex-wrap gap-2 mt-4 pt-4 border-t">
+          <div className="flex flex-col sm:flex-row flex-wrap gap-2 pt-3 md:pt-4 border-t">
             <Button
               variant="outline"
               size="sm"
               onClick={handleExport}
               disabled={filteredPositions.length === 0}
+              className="w-full sm:w-auto"
             >
               <Download className="h-4 w-4 mr-2" />
               Excel izvoz
@@ -520,12 +526,13 @@ const Positions = () => {
                   variant={createMode ? "default" : "outline"}
                   size="sm"
                   onClick={() => setCreateMode(!createMode)}
+                  className="w-full sm:w-auto"
                 >
                   <Plus className="h-4 w-4 mr-2" />
                   {createMode ? "Otkaži kreiranje" : "Kreiraj poziciju"}
                 </Button>
                 
-                <div className="relative">
+                <div className="relative w-full sm:w-auto">
                   <input
                     type="file"
                     accept="image/png,image/jpeg,image/jpg,image/svg+xml"
@@ -537,6 +544,7 @@ const Positions = () => {
                     variant="outline"
                     size="sm"
                     disabled={uploadingImage || isAnalyzing}
+                    className="w-full"
                   >
                     <Upload className="h-4 w-4 mr-2" />
                     {uploadingImage || isAnalyzing ? "Učitavanje..." : "Učitaj floorplan"}
@@ -544,7 +552,7 @@ const Positions = () => {
                 </div>
 
                 {backgroundImage && detectionConfidence !== null && (
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 w-full sm:w-auto">
                     <Badge 
                       variant={detectionConfidence >= 80 ? "success" : detectionConfidence >= 60 ? "default" : "destructive"}
                       className="text-sm"
@@ -556,6 +564,7 @@ const Positions = () => {
                       size="sm"
                       onClick={handleRescan}
                       disabled={isAnalyzing}
+                      className="w-full sm:w-auto"
                     >
                       {isAnalyzing ? "Skeniranje..." : "Ponovo skeniraj"}
                     </Button>
@@ -564,91 +573,99 @@ const Positions = () => {
               </>
             )}
             
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleUndo}
-              disabled={!canUndo}
-            >
-              <Undo2 className="h-4 w-4 mr-2" />
-              Undo
-            </Button>
-            
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleRedo}
-              disabled={!canRedo}
-            >
-              <Redo2 className="h-4 w-4 mr-2" />
-              Redo
-            </Button>
-            
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setHistoryDialogOpen(true)}
-            >
-              <History className="h-4 w-4 mr-2" />
-              Istorija ({history.length})
-            </Button>
+            <div className="flex gap-2 w-full sm:w-auto">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleUndo}
+                disabled={!canUndo}
+                className="flex-1 sm:flex-none"
+              >
+                <Undo2 className="h-4 w-4 mr-2" />
+                <span className="hidden sm:inline">Undo</span>
+              </Button>
+              
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleRedo}
+                disabled={!canRedo}
+                className="flex-1 sm:flex-none"
+              >
+                <Redo2 className="h-4 w-4 mr-2" />
+                <span className="hidden sm:inline">Redo</span>
+              </Button>
+              
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setHistoryDialogOpen(true)}
+                className="flex-1 sm:flex-none"
+              >
+                <History className="h-4 w-4 mr-2" />
+                <span className="hidden sm:inline">Istorija ({history.length})</span>
+                <span className="sm:hidden">({history.length})</span>
+              </Button>
+            </div>
           </div>
         )}
       </div>
       </Card>
 
       {/* Content */}
-      <div className={`flex gap-6 flex-1 overflow-hidden ${showFloorPlan ? "" : "flex-col"}`}>
+      <div className={`flex flex-col lg:flex-row gap-4 md:gap-6 flex-1 overflow-hidden`}>
         {/* Table */}
-        <Card className={`overflow-auto ${showFloorPlan ? "w-[40%]" : "w-full"}`}>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Status</TableHead>
-                <TableHead>Store ID</TableHead>
-                <TableHead>Broj</TableHead>
-                <TableHead>Format</TableHead>
-                <TableHead>Tip</TableHead>
-                <TableHead>Zakupac</TableHead>
-                <TableHead>Datum isteka</TableHead>
-                <TableHead>Odgovorna osoba</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filteredPositions.map((position) => (
-                <TableRow
-                  key={position.id}
-                  className="cursor-pointer transition-colors"
-                  onMouseEnter={() => setHoveredPosition(position.id)}
-                  onMouseLeave={() => setHoveredPosition(null)}
-                  onClick={() => {
-                    setSelectedPosition(position);
-                    setEditDialogOpen(true);
-                  }}
-                >
-                  <TableCell>
-                    <Badge variant={position.status === "free" ? "success" : "destructive"}>
-                      {position.status === "free" ? "Slobodno" : "Zauzeto"}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="font-medium">{position.store_id}</TableCell>
-                  <TableCell>{position.position_number}</TableCell>
-                  <TableCell>{position.format}</TableCell>
-                  <TableCell>{position.display_type}</TableCell>
-                  <TableCell>{position.tenant || "-"}</TableCell>
-                  <TableCell>
-                    {position.expiry_date ? format(new Date(position.expiry_date), "dd.MM.yyyy") : "-"}
-                  </TableCell>
-                  <TableCell>{position.responsible_person || "-"}</TableCell>
+        <Card className={`overflow-auto ${showFloorPlan ? "lg:w-[40%]" : "w-full"}`}>
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="whitespace-nowrap">Status</TableHead>
+                  <TableHead className="whitespace-nowrap">Store ID</TableHead>
+                  <TableHead className="whitespace-nowrap">Broj</TableHead>
+                  <TableHead className="whitespace-nowrap">Format</TableHead>
+                  <TableHead className="whitespace-nowrap">Tip</TableHead>
+                  <TableHead className="whitespace-nowrap">Zakupac</TableHead>
+                  <TableHead className="whitespace-nowrap">Datum isteka</TableHead>
+                  <TableHead className="whitespace-nowrap">Odgovorna osoba</TableHead>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+              </TableHeader>
+              <TableBody>
+                {filteredPositions.map((position) => (
+                  <TableRow
+                    key={position.id}
+                    className="cursor-pointer transition-colors"
+                    onMouseEnter={() => setHoveredPosition(position.id)}
+                    onMouseLeave={() => setHoveredPosition(null)}
+                    onClick={() => {
+                      setSelectedPosition(position);
+                      setEditDialogOpen(true);
+                    }}
+                  >
+                    <TableCell>
+                      <Badge variant={position.status === "free" ? "success" : "destructive"}>
+                        {position.status === "free" ? "Slobodno" : "Zauzeto"}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="font-medium">{position.store_id}</TableCell>
+                    <TableCell>{position.position_number}</TableCell>
+                    <TableCell>{position.format}</TableCell>
+                    <TableCell>{position.display_type}</TableCell>
+                    <TableCell>{position.tenant || "-"}</TableCell>
+                    <TableCell>
+                      {position.expiry_date ? format(new Date(position.expiry_date), "dd.MM.yyyy") : "-"}
+                    </TableCell>
+                    <TableCell>{position.responsible_person || "-"}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
         </Card>
 
         {/* Floor Plan */}
         {showFloorPlan && (
-          <Card className="w-[60%] p-6 overflow-auto">
+          <Card className="lg:w-[60%] p-3 md:p-6 overflow-auto min-h-[400px]">
             <FloorPlan
               positions={filteredPositions}
               hoveredPosition={hoveredPosition}

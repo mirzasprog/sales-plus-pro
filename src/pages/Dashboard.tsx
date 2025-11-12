@@ -169,42 +169,42 @@ const Dashboard = () => {
   }
 
   return (
-    <div className="space-y-6 p-6">
+    <div className="space-y-4 md:space-y-6 p-3 md:p-6">
       <div>
-        <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
-        <p className="text-muted-foreground">Pregled statistike dodatnih pozicija</p>
+        <h1 className="text-2xl md:text-3xl font-bold tracking-tight">Dashboard</h1>
+        <p className="text-sm md:text-base text-muted-foreground">Pregled statistike dodatnih pozicija</p>
       </div>
 
       {/* Stats Grid */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-3 md:gap-4 grid-cols-2 lg:grid-cols-4">
         {statsCards.map((stat, index) => (
           <Card key={index}>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">{stat.title}</CardTitle>
-              <stat.icon className={`h-4 w-4 ${stat.color}`} />
+              <CardTitle className="text-xs md:text-sm font-medium">{stat.title}</CardTitle>
+              <stat.icon className={`h-3 w-3 md:h-4 md:w-4 ${stat.color}`} />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{stat.value}</div>
+              <div className="text-xl md:text-2xl font-bold">{stat.value}</div>
             </CardContent>
           </Card>
         ))}
       </div>
 
       {/* Charts */}
-      <div className="grid gap-6 md:grid-cols-2">
+      <div className="grid gap-4 md:gap-6 grid-cols-1 md:grid-cols-2">
         <Card>
           <CardHeader>
-            <CardTitle>Zauzetost po prodavnicama</CardTitle>
-            <CardDescription>Broj zauzetih i slobodnih pozicija</CardDescription>
+            <CardTitle className="text-base md:text-lg">Zauzetost po prodavnicama</CardTitle>
+            <CardDescription className="text-xs md:text-sm">Broj zauzetih i slobodnih pozicija</CardDescription>
           </CardHeader>
           <CardContent>
-            <ResponsiveContainer width="100%" height={300}>
+            <ResponsiveContainer width="100%" height={250}>
               <BarChart data={storeData}>
                 <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="name" />
-                <YAxis />
+                <XAxis dataKey="name" tick={{ fontSize: 12 }} />
+                <YAxis tick={{ fontSize: 12 }} />
                 <Tooltip />
-                <Legend />
+                <Legend wrapperStyle={{ fontSize: '12px' }} />
                 <Bar dataKey="zauzeto" fill="hsl(var(--destructive))" />
                 <Bar dataKey="slobodno" fill="hsl(var(--success))" />
               </BarChart>
@@ -214,11 +214,11 @@ const Dashboard = () => {
 
         <Card>
           <CardHeader>
-            <CardTitle>Ukupna zauzetost</CardTitle>
-            <CardDescription>Pregled svih pozicija</CardDescription>
+            <CardTitle className="text-base md:text-lg">Ukupna zauzetost</CardTitle>
+            <CardDescription className="text-xs md:text-sm">Pregled svih pozicija</CardDescription>
           </CardHeader>
           <CardContent className="flex items-center justify-center">
-            <ResponsiveContainer width="100%" height={300}>
+            <ResponsiveContainer width="100%" height={250}>
               <PieChart>
                 <Pie
                   data={pieData}
@@ -226,7 +226,7 @@ const Dashboard = () => {
                   cy="50%"
                   labelLine={false}
                   label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
-                  outerRadius={100}
+                  outerRadius={80}
                   fill="#8884d8"
                   dataKey="value"
                 >
@@ -242,17 +242,17 @@ const Dashboard = () => {
 
         <Card className="md:col-span-2">
           <CardHeader>
-            <CardTitle>Trend zauzetosti</CardTitle>
-            <CardDescription>Pregled zauzetosti u proteklih 5 meseci</CardDescription>
+            <CardTitle className="text-base md:text-lg">Trend zauzetosti</CardTitle>
+            <CardDescription className="text-xs md:text-sm">Pregled zauzetosti u proteklih 5 meseci</CardDescription>
           </CardHeader>
           <CardContent>
-            <ResponsiveContainer width="100%" height={300}>
+            <ResponsiveContainer width="100%" height={250}>
               <LineChart data={trendData}>
                 <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="month" />
-                <YAxis />
+                <XAxis dataKey="month" tick={{ fontSize: 12 }} />
+                <YAxis tick={{ fontSize: 12 }} />
                 <Tooltip />
-                <Legend />
+                <Legend wrapperStyle={{ fontSize: '12px' }} />
                 <Line type="monotone" dataKey="zauzeto" stroke="hsl(var(--primary))" strokeWidth={2} />
               </LineChart>
             </ResponsiveContainer>
@@ -261,17 +261,17 @@ const Dashboard = () => {
 
         <Card>
           <CardHeader>
-            <CardTitle>Zauzetost po formatu</CardTitle>
-            <CardDescription>Raspodjela po tipovima formata</CardDescription>
+            <CardTitle className="text-base md:text-lg">Zauzetost po formatu</CardTitle>
+            <CardDescription className="text-xs md:text-sm">Raspodjela po tipovima formata</CardDescription>
           </CardHeader>
           <CardContent>
-            <ResponsiveContainer width="100%" height={300}>
+            <ResponsiveContainer width="100%" height={250}>
               <BarChart data={formatData} layout="vertical">
                 <CartesianGrid strokeDasharray="3 3" />
-                <XAxis type="number" />
-                <YAxis type="category" dataKey="name" width={100} />
+                <XAxis type="number" tick={{ fontSize: 12 }} />
+                <YAxis type="category" dataKey="name" width={80} tick={{ fontSize: 10 }} />
                 <Tooltip />
-                <Legend />
+                <Legend wrapperStyle={{ fontSize: '12px' }} />
                 <Bar dataKey="zauzeto" fill="hsl(var(--destructive))" name="Zauzeto" />
                 <Bar dataKey="slobodno" fill="hsl(var(--success))" name="Slobodno" />
               </BarChart>
@@ -281,17 +281,17 @@ const Dashboard = () => {
 
         <Card>
           <CardHeader>
-            <CardTitle>Zauzetost po tipu displeja</CardTitle>
-            <CardDescription>Raspodjela po tipovima displeja</CardDescription>
+            <CardTitle className="text-base md:text-lg">Zauzetost po tipu displeja</CardTitle>
+            <CardDescription className="text-xs md:text-sm">Raspodjela po tipovima displeja</CardDescription>
           </CardHeader>
           <CardContent>
-            <ResponsiveContainer width="100%" height={300}>
+            <ResponsiveContainer width="100%" height={250}>
               <BarChart data={displayTypeData} layout="vertical">
                 <CartesianGrid strokeDasharray="3 3" />
-                <XAxis type="number" />
-                <YAxis type="category" dataKey="name" width={100} />
+                <XAxis type="number" tick={{ fontSize: 12 }} />
+                <YAxis type="category" dataKey="name" width={80} tick={{ fontSize: 10 }} />
                 <Tooltip />
-                <Legend />
+                <Legend wrapperStyle={{ fontSize: '12px' }} />
                 <Bar dataKey="zauzeto" fill="hsl(var(--destructive))" name="Zauzeto" />
                 <Bar dataKey="slobodno" fill="hsl(var(--success))" name="Slobodno" />
               </BarChart>

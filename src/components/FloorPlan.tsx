@@ -260,17 +260,17 @@ const FloorPlan = ({
   };
 
   return (
-    <div className="relative w-full h-full min-h-[500px] bg-muted/20 rounded-lg overflow-hidden">
+    <div className="relative w-full h-full min-h-[400px] md:min-h-[500px] bg-muted/20 rounded-lg overflow-hidden">
       {isAdmin && !createMode && (
-        <div className="absolute top-4 left-4 z-10 bg-primary/90 text-primary-foreground px-4 py-2 rounded-lg shadow-lg animate-fade-in">
-          <p className="text-sm font-semibold">🎯 Admin režim</p>
-          <p className="text-xs opacity-90">Prevuci pozicije ili promeni veličinu</p>
+        <div className="absolute top-2 left-2 md:top-4 md:left-4 z-10 bg-primary/90 text-primary-foreground px-2 py-1 md:px-4 md:py-2 rounded-lg shadow-lg animate-fade-in">
+          <p className="text-xs md:text-sm font-semibold">🎯 Admin režim</p>
+          <p className="text-[10px] md:text-xs opacity-90 hidden sm:block">Prevuci pozicije ili promeni veličinu</p>
         </div>
       )}
       {isAdmin && createMode && (
-        <div className="absolute top-4 left-4 z-10 bg-accent/90 text-accent-foreground px-4 py-2 rounded-lg shadow-lg animate-fade-in">
-          <p className="text-sm font-semibold">➕ Režim kreiranja</p>
-          <p className="text-xs opacity-90">Klikni na plan za kreiranje nove pozicije</p>
+        <div className="absolute top-2 left-2 md:top-4 md:left-4 z-10 bg-accent/90 text-accent-foreground px-2 py-1 md:px-4 md:py-2 rounded-lg shadow-lg animate-fade-in">
+          <p className="text-xs md:text-sm font-semibold">➕ Režim kreiranja</p>
+          <p className="text-[10px] md:text-xs opacity-90 hidden sm:block">Klikni na plan za kreiranje nove pozicije</p>
         </div>
       )}
       <svg 
@@ -441,16 +441,16 @@ const FloorPlan = ({
       </svg>
 
       {/* Legend */}
-      <div className="absolute bottom-4 right-4 bg-card border border-border rounded-lg p-3 shadow-lg">
-        <p className="text-xs font-semibold mb-2">Legenda</p>
-        <div className="space-y-1.5">
-          <div className="flex items-center gap-2">
-            <div className="w-4 h-4 rounded border-2 border-success bg-success/20"></div>
-            <span className="text-xs">Slobodno</span>
+      <div className="absolute bottom-2 right-2 md:bottom-4 md:right-4 bg-card border border-border rounded-lg p-2 md:p-3 shadow-lg">
+        <p className="text-[10px] md:text-xs font-semibold mb-1 md:mb-2">Legenda</p>
+        <div className="space-y-1 md:space-y-1.5">
+          <div className="flex items-center gap-1.5 md:gap-2">
+            <div className="w-3 h-3 md:w-4 md:h-4 rounded border-2 border-success bg-success/20"></div>
+            <span className="text-[10px] md:text-xs">Slobodno</span>
           </div>
-          <div className="flex items-center gap-2">
-            <div className="w-4 h-4 rounded border-2 border-destructive bg-destructive/20"></div>
-            <span className="text-xs">Zauzeto</span>
+          <div className="flex items-center gap-1.5 md:gap-2">
+            <div className="w-3 h-3 md:w-4 md:h-4 rounded border-2 border-destructive bg-destructive/20"></div>
+            <span className="text-[10px] md:text-xs">Zauzeto</span>
           </div>
         </div>
       </div>
