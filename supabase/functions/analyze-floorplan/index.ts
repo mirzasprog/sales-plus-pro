@@ -43,6 +43,7 @@ Za svaku poziciju mi treba:
 - width: širina elementa u postocima (procijeni na osnovu veličine na slici, npr. 8-15)
 - height: visina elementa u postocima (procijeni na osnovu veličine na slici, npr. 6-12)
 - status: ako je pozicija zelena, status je "free", ako je crvena ili pink, status je "occupied"
+- confidence: procenat sigurnosti u detekciju (0-100), obzirom na jasnoću oznake i boje
 
 Također, na osnovu position_number-a odredi tip:
 - Ako počinje sa A ili je polica: format="Polica", display_type="Standardni", width=12, height=8
@@ -50,20 +51,26 @@ Također, na osnovu position_number-a odredi tip:
 - Ako počinje sa C ili je vitrina: format="Vitrina", display_type="Rashladna", width=15, height=10
 - Za brojčane oznake: format="Displej", display_type="Zidni", width=10, height=8
 
-Vrati SAMO JSON niz u formatu:
-[
-  {
-    "position_number": "002",
-    "x": 25.5,
-    "y": 15.2,
-    "width": 10,
-    "height": 8,
-    "status": "free",
-    "format": "Displej",
-    "display_type": "Zidni"
-  },
-  ...
-]`
+Na kraju, procijeni i vrati ukupnu tačnost detekcije (overall_confidence) od 0-100.
+
+Vrati SAMO JSON u formatu:
+{
+  "overall_confidence": 85,
+  "positions": [
+    {
+      "position_number": "002",
+      "x": 25.5,
+      "y": 15.2,
+      "width": 10,
+      "height": 8,
+      "status": "free",
+      "format": "Displej",
+      "display_type": "Zidni",
+      "confidence": 90
+    },
+    ...
+  ]
+}`
               },
               {
                 type: 'image_url',
@@ -91,24 +98,27 @@ Vrati SAMO JSON niz u formatu:
     }
 
     // Extract JSON from response (handle markdown code blocks)
-    let positions;
+    let result;
     try {
       const jsonMatch = content.match(/```json\n([\s\S]*?)\n```/) || 
-                       content.match(/\[[\s\S]*\]/);
+                       content.match(/\{[\s\S]*"positions"[\s\S]*\}/);
       const jsonString = jsonMatch ? (jsonMatch[1] || jsonMatch[0]) : content;
-      positions = JSON.parse(jsonString);
+      result = JSON.parse(jsonString);
     } catch (e) {
       console.error('Failed to parse AI response:', content);
       throw new Error('Failed to parse AI response as JSON');
     }
 
-    // Validate and return positions
-    if (!Array.isArray(positions)) {
-      throw new Error('AI response is not an array');
+    // Validate response structure
+    if (!result.positions || !Array.isArray(result.positions)) {
+      throw new Error('AI response missing positions array');
     }
 
     return new Response(
-      JSON.stringify({ positions }),
+      JSON.stringify({ 
+        positions: result.positions,
+        overall_confidence: result.overall_confidence || 75
+      }),
       { 
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         status: 200,

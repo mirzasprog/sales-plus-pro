@@ -59,6 +59,8 @@ const Positions = () => {
   const [backgroundImage, setBackgroundImage] = useState<string | null>(null);
   const [uploadingImage, setUploadingImage] = useState(false);
   const [historyDialogOpen, setHistoryDialogOpen] = useState(false);
+  const [detectionConfidence, setDetectionConfidence] = useState<number | null>(null);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
   
   const { undo, redo, canUndo, canRedo, history } = usePositionHistory(selectedStore);
 
@@ -181,17 +183,30 @@ const Positions = () => {
       if (dbError) throw dbError;
 
       setBackgroundImage(publicUrl);
-
-      // Analyze the floorplan and auto-create positions
+      await analyzeFloorplan(publicUrl);
+    } catch (error: any) {
       toast({
-        title: "Analiziranje tlocrta...",
-        description: "AI analizira sliku i kreira pozicije",
+        variant: "destructive",
+        title: "Greška",
+        description: error.message || "Nije moguće učitati sliku",
       });
+    } finally {
+      setUploadingImage(false);
+    }
+  };
 
+  const analyzeFloorplan = async (imageUrl: string) => {
+    setIsAnalyzing(true);
+    toast({
+      title: "Analiziranje tlocrta...",
+      description: "AI analizira sliku i kreira pozicije",
+    });
+
+    try {
       const { data: functionData, error: functionError } = await supabase.functions.invoke(
         'analyze-floorplan',
         {
-          body: { imageUrl: publicUrl, storeId: selectedStore }
+          body: { imageUrl, storeId: selectedStore }
         }
       );
 
@@ -202,7 +217,11 @@ const Positions = () => {
           title: "Upozorenje",
           description: "Slika je učitana, ali automatska analiza nije uspjela. Možete ručno kreirati pozicije.",
         });
+        setDetectionConfidence(null);
       } else if (functionData?.positions && Array.isArray(functionData.positions)) {
+        const confidence = functionData.overall_confidence || 75;
+        setDetectionConfidence(confidence);
+
         // Create positions from AI analysis
         const positionsToCreate = functionData.positions.map((pos: any) => ({
           store_id: selectedStore,
@@ -230,20 +249,35 @@ const Positions = () => {
         } else {
           toast({
             title: "Uspješno!",
-            description: `${positionsToCreate.length} pozicija automatski kreirano`,
+            description: `${positionsToCreate.length} pozicija detektovano (${confidence}% tačnost)`,
           });
           fetchPositions();
         }
       }
-    } catch (error: any) {
+    } finally {
+      setIsAnalyzing(false);
+    }
+  };
+
+  const handleRescan = async () => {
+    if (!backgroundImage || selectedStore === "all") return;
+    
+    // Delete existing positions for this store
+    const { error: deleteError } = await supabase
+      .from('positions')
+      .delete()
+      .eq('store_id', selectedStore);
+
+    if (deleteError) {
       toast({
         variant: "destructive",
         title: "Greška",
-        description: error.message || "Nije moguće učitati sliku",
+        description: "Nije moguće obrisati postojeće pozicije",
       });
-    } finally {
-      setUploadingImage(false);
+      return;
     }
+
+    await analyzeFloorplan(backgroundImage);
   };
 
   const handlePositionCreate = (x: number, y: number) => {
@@ -469,17 +503,36 @@ const Positions = () => {
                     accept="image/png,image/jpeg,image/jpg,image/svg+xml"
                     onChange={handleImageUpload}
                     className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                    disabled={uploadingImage}
+                    disabled={uploadingImage || isAnalyzing}
                   />
                   <Button
                     variant="outline"
                     size="sm"
-                    disabled={uploadingImage}
+                    disabled={uploadingImage || isAnalyzing}
                   >
                     <Upload className="h-4 w-4 mr-2" />
-                    {uploadingImage ? "Učitavanje..." : "Učitaj floorplan"}
+                    {uploadingImage || isAnalyzing ? "Učitavanje..." : "Učitaj floorplan"}
                   </Button>
                 </div>
+
+                {backgroundImage && detectionConfidence !== null && (
+                  <div className="flex items-center gap-2">
+                    <Badge 
+                      variant={detectionConfidence >= 80 ? "success" : detectionConfidence >= 60 ? "default" : "destructive"}
+                      className="text-sm"
+                    >
+                      Tačnost: {detectionConfidence}%
+                    </Badge>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleRescan}
+                      disabled={isAnalyzing}
+                    >
+                      {isAnalyzing ? "Skeniranje..." : "Ponovo skeniraj"}
+                    </Button>
+                  </div>
+                )}
               </>
             )}
             
