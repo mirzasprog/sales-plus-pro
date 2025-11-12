@@ -183,6 +183,17 @@ const Positions = () => {
       if (dbError) throw dbError;
 
       setBackgroundImage(publicUrl);
+      
+      // Delete existing positions before analyzing new floorplan
+      const { error: deleteError } = await supabase
+        .from('positions')
+        .delete()
+        .eq('store_id', selectedStore);
+
+      if (deleteError) {
+        console.error('Error deleting positions:', deleteError);
+      }
+
       await analyzeFloorplan(publicUrl);
     } catch (error: any) {
       toast({

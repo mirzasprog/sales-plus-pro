@@ -14,12 +14,14 @@ serve(async (req) => {
 
   try {
     const { imageUrl, storeId } = await req.json();
+    console.log('Analyzing floorplan for store:', storeId, 'Image URL:', imageUrl);
 
     if (!imageUrl || !storeId) {
       throw new Error('imageUrl and storeId are required');
     }
 
     // Analyze the floorplan image using AI
+    console.log('Calling AI gateway...');
     const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
       method: 'POST',
       headers: {
@@ -86,16 +88,20 @@ Vrati SAMO JSON u formatu:
 
     if (!response.ok) {
       const error = await response.text();
-      console.error('AI API error:', error);
+      console.error('AI API error:', response.status, error);
       throw new Error(`AI API error: ${response.status}`);
     }
 
     const aiResponse = await response.json();
+    console.log('AI response received');
     const content = aiResponse.choices?.[0]?.message?.content;
 
     if (!content) {
+      console.error('No content in AI response');
       throw new Error('No response from AI');
     }
+    
+    console.log('Parsing AI response...');
 
     // Extract JSON from response (handle markdown code blocks)
     let result;
@@ -111,8 +117,11 @@ Vrati SAMO JSON u formatu:
 
     // Validate response structure
     if (!result.positions || !Array.isArray(result.positions)) {
+      console.error('Invalid AI response structure:', result);
       throw new Error('AI response missing positions array');
     }
+
+    console.log(`Successfully detected ${result.positions.length} positions with ${result.overall_confidence}% confidence`);
 
     return new Response(
       JSON.stringify({ 
