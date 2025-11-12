@@ -150,6 +150,23 @@ export const FloorPlanEditor = ({ storeId, storeName, onLayoutSaved, stores = []
       backgroundColor: "#f8f9fa",
     });
 
+    // Draw grid first
+    drawGrid(canvas, displayWidth, displayHeight);
+
+    // Draw store boundary
+    const boundary = new Rect({
+      left: 10,
+      top: 10,
+      width: displayWidth - 20,
+      height: displayHeight - 20,
+      fill: "transparent",
+      stroke: "#000000",
+      strokeWidth: 3,
+      selectable: false,
+      evented: false,
+    });
+    canvas.add(boundary);
+
     canvas.on('selection:created', (e) => {
       const activeObject = e.selected?.[0];
       setSelectedObject(activeObject || null);
@@ -238,19 +255,48 @@ export const FloorPlanEditor = ({ storeId, storeName, onLayoutSaved, stores = []
         if (typeof data.layout_data === 'object') {
           const layoutData = data.layout_data as any;
           if (layoutData.objects && layoutData.objects.length > 0) {
+            console.log("Loading layout with", layoutData.objects.length, "objects");
+            
+            // Keep grid and boundary by filtering non-editable objects
+            const existingBackground = targetCanvas.getObjects().filter(obj => 
+              !obj.selectable && !obj.evented
+            );
+            
+            // Clear canvas
+            targetCanvas.clear();
+            
+            // Re-add background elements (grid and boundary)
+            existingBackground.forEach(obj => targetCanvas.add(obj));
+            
+            // Load layout objects
             targetCanvas.loadFromJSON(layoutData, () => {
+              // Ensure grid and boundary are at the back
+              const allObjects = targetCanvas.getObjects();
+              allObjects.forEach(obj => {
+                if (!obj.selectable && !obj.evented) {
+                  targetCanvas.sendObjectToBack(obj);
+                }
+              });
+              
               targetCanvas.renderAll();
               saveHistory();
               toast({
                 title: "Layout učitan",
-                description: "Postojeći nacrt je učitan sa svim elementima",
+                description: `Postojeći nacrt učitan sa ${layoutData.objects.length} elemenata`,
               });
             });
+          } else {
+            console.log("No objects in layout data");
+            saveHistory();
           }
         }
+      } else {
+        console.log("No existing layout found");
+        saveHistory();
       }
     } catch (error) {
       console.error("Error loading layout:", error);
+      saveHistory();
     }
   };
 

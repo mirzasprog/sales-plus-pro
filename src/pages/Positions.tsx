@@ -63,6 +63,7 @@ const Positions = () => {
   const [detectionConfidence, setDetectionConfidence] = useState<number | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [editorMode, setEditorMode] = useState(false);
+  const [hasExistingLayout, setHasExistingLayout] = useState(false);
   
   const { undo, redo, canUndo, canRedo, history } = usePositionHistory(selectedStore);
 
@@ -74,10 +75,31 @@ const Positions = () => {
   useEffect(() => {
     if (selectedStore !== "all") {
       fetchFloorplanImage();
+      checkExistingLayout();
     } else {
       setBackgroundImage(null);
+      setHasExistingLayout(false);
     }
   }, [selectedStore]);
+
+  const checkExistingLayout = async () => {
+    if (selectedStore === "all") return;
+
+    try {
+      const { data, error } = await supabase
+        .from("floorplan_layouts")
+        .select("id")
+        .eq("store_id", selectedStore)
+        .limit(1)
+        .maybeSingle();
+
+      if (error) throw error;
+      setHasExistingLayout(!!data);
+    } catch (error: any) {
+      console.error("Error checking layout:", error);
+      setHasExistingLayout(false);
+    }
+  };
 
   const fetchStores = async () => {
     try {
@@ -524,15 +546,27 @@ const Positions = () => {
             
             {selectedStore !== "all" && (
               <>
-                <Button
-                  variant={editorMode ? "default" : "outline"}
-                  size="sm"
-                  onClick={() => setEditorMode(!editorMode)}
-                  className="w-full sm:w-auto"
-                >
-                  <Plus className="h-4 w-4 mr-2" />
-                  {editorMode ? "Zatvori editor" : "Kreiraj nacrt"}
-                </Button>
+                {hasExistingLayout ? (
+                  <Button
+                    variant={editorMode ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => setEditorMode(!editorMode)}
+                    className="w-full sm:w-auto"
+                  >
+                    <Plus className="h-4 w-4 mr-2" />
+                    {editorMode ? "Zatvori editor" : "Uredi nacrt"}
+                  </Button>
+                ) : (
+                  <Button
+                    variant={editorMode ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => setEditorMode(!editorMode)}
+                    className="w-full sm:w-auto"
+                  >
+                    <Plus className="h-4 w-4 mr-2" />
+                    {editorMode ? "Zatvori editor" : "Kreiraj nacrt"}
+                  </Button>
+                )}
 
                 {backgroundImage && detectionConfidence !== null && (
                   <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 w-full sm:w-auto">
@@ -605,6 +639,7 @@ const Positions = () => {
               onLayoutSaved={() => {
                 setEditorMode(false);
                 fetchPositions();
+                checkExistingLayout();
               }}
               stores={stores}
             />
