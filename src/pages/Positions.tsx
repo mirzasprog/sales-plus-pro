@@ -181,10 +181,60 @@ const Positions = () => {
       if (dbError) throw dbError;
 
       setBackgroundImage(publicUrl);
+
+      // Analyze the floorplan and auto-create positions
       toast({
-        title: "Slika učitana",
-        description: "Slika floorplana je uspešno učitana",
+        title: "Analiziranje tlocrta...",
+        description: "AI analizira sliku i kreira pozicije",
       });
+
+      const { data: functionData, error: functionError } = await supabase.functions.invoke(
+        'analyze-floorplan',
+        {
+          body: { imageUrl: publicUrl, storeId: selectedStore }
+        }
+      );
+
+      if (functionError) {
+        console.error('Error analyzing floorplan:', functionError);
+        toast({
+          variant: "destructive",
+          title: "Upozorenje",
+          description: "Slika je učitana, ali automatska analiza nije uspjela. Možete ručno kreirati pozicije.",
+        });
+      } else if (functionData?.positions && Array.isArray(functionData.positions)) {
+        // Create positions from AI analysis
+        const positionsToCreate = functionData.positions.map((pos: any) => ({
+          store_id: selectedStore,
+          position_number: pos.position_number,
+          format: pos.format || 'Displej',
+          display_type: pos.display_type || 'Zidni',
+          x: pos.x || 0,
+          y: pos.y || 0,
+          width: pos.width || 100,
+          height: pos.height || 80,
+          status: pos.status || 'free',
+        }));
+
+        const { error: insertError } = await supabase
+          .from('positions')
+          .insert(positionsToCreate);
+
+        if (insertError) {
+          console.error('Error creating positions:', insertError);
+          toast({
+            variant: "destructive",
+            title: "Greška",
+            description: "Pozicije nisu mogle biti kreirane automatski",
+          });
+        } else {
+          toast({
+            title: "Uspješno!",
+            description: `${positionsToCreate.length} pozicija automatski kreirano`,
+          });
+          fetchPositions();
+        }
+      }
     } catch (error: any) {
       toast({
         variant: "destructive",
