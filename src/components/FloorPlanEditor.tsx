@@ -27,6 +27,8 @@ const EQUIPMENT_TYPES = [
 ];
 
 const SCALE_FACTOR = 0.05; // 1mm = 0.05px for display
+const GRID_SIZE_MM = 50; // Grid na svakih 50mm
+const GRID_SIZE_PX = GRID_SIZE_MM * SCALE_FACTOR; // Grid u pixelima
 
 export const FloorPlanEditor = ({ storeId, storeName, onLayoutSaved, stores = [] }: FloorPlanEditorProps) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -65,6 +67,40 @@ export const FloorPlanEditor = ({ storeId, storeName, onLayoutSaved, stores = []
   const { toast } = useToast();
   const { user, isAdmin } = useAuth();
 
+  // Snap to grid funkcija
+  const snapToGrid = (value: number) => {
+    return Math.round(value / GRID_SIZE_PX) * GRID_SIZE_PX;
+  };
+
+  // Funkcija za crtanje grid-a
+  const drawGrid = (canvas: FabricCanvas, width: number, height: number) => {
+    const gridSize = GRID_SIZE_PX;
+    
+    // Crtaj vertikalne linije
+    for (let i = 0; i <= width; i += gridSize) {
+      const line = new Line([i, 0, i, height], {
+        stroke: '#e0e0e0',
+        strokeWidth: 0.5,
+        selectable: false,
+        evented: false,
+      });
+      canvas.add(line);
+      canvas.sendObjectToBack(line);
+    }
+    
+    // Crtaj horizontalne linije
+    for (let i = 0; i <= height; i += gridSize) {
+      const line = new Line([0, i, width, i], {
+        stroke: '#e0e0e0',
+        strokeWidth: 0.5,
+        selectable: false,
+        evented: false,
+      });
+      canvas.add(line);
+      canvas.sendObjectToBack(line);
+    }
+  };
+
   useEffect(() => {
     if (!canvasRef.current || !isAdmin) return;
 
@@ -76,6 +112,9 @@ export const FloorPlanEditor = ({ storeId, storeName, onLayoutSaved, stores = []
       height: displayHeight,
       backgroundColor: "#ffffff",
     });
+
+    // Nacrtaj grid
+    drawGrid(canvas, displayWidth, displayHeight);
 
     setFabricCanvas(canvas);
     loadExistingLayout();
@@ -114,6 +153,60 @@ export const FloorPlanEditor = ({ storeId, storeName, onLayoutSaved, stores = []
     // Save to history after object modification
     canvas.on("object:modified", () => {
       saveHistory();
+    });
+
+    // Event listener za double click - otvara detalje
+    canvas.on("mouse:dblclick", (e) => {
+      if (e.target && e.target.type !== 'line') {
+        const target = e.target;
+        setSelectedObject(target);
+        
+        const objData = (target as any).customData || {};
+        const currentWidth = ((target.width || 100) * (target.scaleX || 1)) / SCALE_FACTOR;
+        const currentHeight = ((target.height || 80) * (target.scaleY || 1)) / SCALE_FACTOR;
+        
+        setEquipmentDetails({
+          position_number: (target as any).position_number || "",
+          format: (target as any).format || "",
+          display_type: (target as any).display_type || "",
+          tenant: (target as any).tenant || "",
+          expiry_date: (target as any).expiry_date || "",
+          status: (target as any).status || "free",
+          purpose: (target as any).purpose || "",
+          department: (target as any).department || "",
+          category: (target as any).category || "",
+          width_mm: objData.width_mm?.toString() || currentWidth.toFixed(0),
+          length_mm: objData.length_mm?.toString() || currentHeight.toFixed(0),
+          height_mm: (target as any).height_mm?.toString() || "",
+          depth_mm: (target as any).depth_mm?.toString() || "",
+          x_position: ((target.left || 0) / SCALE_FACTOR).toFixed(0),
+          y_position: ((target.top || 0) / SCALE_FACTOR).toFixed(0),
+        });
+        setDetailsDialogOpen(true);
+      }
+    });
+
+    // Event listener za snap-to-grid kada se objekat pomera
+    canvas.on("object:moving", (e) => {
+      const obj = e.target;
+      if (obj && obj.type !== 'line') {
+        obj.set({
+          left: snapToGrid(obj.left || 0),
+          top: snapToGrid(obj.top || 0),
+        });
+      }
+    });
+
+    // Event listener za snap-to-grid kada se objekat dodaje
+    canvas.on("object:added", (e) => {
+      const obj = e.target;
+      if (obj && obj.type !== 'line') {
+        obj.set({
+          left: snapToGrid(obj.left || 0),
+          top: snapToGrid(obj.top || 0),
+        });
+        canvas.renderAll();
+      }
     });
 
     return () => {
@@ -309,19 +402,20 @@ export const FloorPlanEditor = ({ storeId, storeName, onLayoutSaved, stores = []
     const displayHeight = type.height * SCALE_FACTOR;
 
     const equipment = new Rect({
-      left: 100,
-      top: 100,
+      left: snapToGrid(100),
+      top: snapToGrid(100),
       width: displayWidth,
       height: displayHeight,
       fill: type.color,
       stroke: "#000000",
       strokeWidth: 2,
       selectable: true,
+      evented: true,
     });
 
     const label = new FabricText(type.label, {
-      left: 100 + displayWidth / 2,
-      top: 100 + displayHeight / 2,
+      left: snapToGrid(100) + displayWidth / 2,
+      top: snapToGrid(100) + displayHeight / 2,
       fontSize: 12,
       fill: "#000000",
       originX: "center",
@@ -358,16 +452,26 @@ export const FloorPlanEditor = ({ storeId, storeName, onLayoutSaved, stores = []
     });
   };
 
-  const handleObjectDoubleClick = () => {
+  const handleOpenDetailsDialog = () => {
     if (selectedObject && selectedObject.type === "rect") {
       const objData = (selectedObject as any).customData || {};
       const currentWidth = ((selectedObject.width || 100) * (selectedObject.scaleX || 1)) / SCALE_FACTOR;
       const currentHeight = ((selectedObject.height || 80) * (selectedObject.scaleY || 1)) / SCALE_FACTOR;
       
       setEquipmentDetails({
-        ...equipmentDetails,
+        position_number: (selectedObject as any).position_number || "",
+        format: (selectedObject as any).format || "",
+        display_type: (selectedObject as any).display_type || "",
+        tenant: (selectedObject as any).tenant || "",
+        expiry_date: (selectedObject as any).expiry_date || "",
+        status: (selectedObject as any).status || "free",
+        purpose: (selectedObject as any).purpose || "",
+        department: (selectedObject as any).department || "",
+        category: (selectedObject as any).category || "",
         width_mm: objData.width_mm?.toString() || currentWidth.toFixed(0),
         length_mm: objData.length_mm?.toString() || currentHeight.toFixed(0),
+        height_mm: (selectedObject as any).height_mm?.toString() || "",
+        depth_mm: (selectedObject as any).depth_mm?.toString() || "",
         x_position: ((selectedObject.left || 0) / SCALE_FACTOR).toFixed(0),
         y_position: ((selectedObject.top || 0) / SCALE_FACTOR).toFixed(0),
       });
@@ -380,6 +484,19 @@ export const FloorPlanEditor = ({ storeId, storeName, onLayoutSaved, stores = []
 
     const objData = (selectedObject as any).customData || {};
     
+    // Sačuvaj sve atribute u objekat
+    (selectedObject as any).position_number = equipmentDetails.position_number;
+    (selectedObject as any).format = equipmentDetails.format;
+    (selectedObject as any).display_type = equipmentDetails.display_type;
+    (selectedObject as any).tenant = equipmentDetails.tenant;
+    (selectedObject as any).expiry_date = equipmentDetails.expiry_date;
+    (selectedObject as any).status = equipmentDetails.status;
+    (selectedObject as any).purpose = equipmentDetails.purpose;
+    (selectedObject as any).department = equipmentDetails.department;
+    (selectedObject as any).category = equipmentDetails.category;
+    (selectedObject as any).height_mm = equipmentDetails.height_mm;
+    (selectedObject as any).depth_mm = equipmentDetails.depth_mm;
+    
     // Update canvas object with new dimensions if provided
     if (equipmentDetails.width_mm && equipmentDetails.length_mm) {
       const newWidth = Number(equipmentDetails.width_mm) * SCALE_FACTOR;
@@ -390,13 +507,21 @@ export const FloorPlanEditor = ({ storeId, storeName, onLayoutSaved, stores = []
         scaleX: 1,
         scaleY: 1,
       });
+      
+      // Ažuriraj customData
+      if (!(selectedObject as any).customData) {
+        (selectedObject as any).customData = {};
+      }
+      (selectedObject as any).customData.width_mm = Number(equipmentDetails.width_mm);
+      (selectedObject as any).customData.length_mm = Number(equipmentDetails.length_mm);
+      
       fabricCanvas?.renderAll();
     }
 
     if (equipmentDetails.x_position && equipmentDetails.y_position) {
       selectedObject.set({
-        left: Number(equipmentDetails.x_position) * SCALE_FACTOR,
-        top: Number(equipmentDetails.y_position) * SCALE_FACTOR,
+        left: snapToGrid(Number(equipmentDetails.x_position) * SCALE_FACTOR),
+        top: snapToGrid(Number(equipmentDetails.y_position) * SCALE_FACTOR),
       });
       fabricCanvas?.renderAll();
     }
@@ -644,7 +769,7 @@ export const FloorPlanEditor = ({ storeId, storeName, onLayoutSaved, stores = []
           <Button onClick={deleteSelected} variant="outline" size="sm" disabled={!selectedObject}>
             <Trash2 className="h-4 w-4" />
           </Button>
-          <Button onClick={handleObjectDoubleClick} variant="outline" size="sm" disabled={!selectedObject}>
+          <Button onClick={handleOpenDetailsDialog} variant="outline" size="sm" disabled={!selectedObject}>
             Detalji
           </Button>
           <Button onClick={handleCopyLayout} variant="outline" size="sm">
