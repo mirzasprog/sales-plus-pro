@@ -14,6 +14,60 @@ export type Database = {
   }
   public: {
     Tables: {
+      floorplan_images: {
+        Row: {
+          created_at: string
+          id: string
+          image_url: string
+          store_id: string
+          uploaded_by: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          image_url: string
+          store_id: string
+          uploaded_by: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          image_url?: string
+          store_id?: string
+          uploaded_by?: string
+        }
+        Relationships: []
+      }
+      position_history: {
+        Row: {
+          action: string
+          created_at: string
+          id: string
+          new_data: Json | null
+          old_data: Json | null
+          position_id: string
+          user_id: string
+        }
+        Insert: {
+          action: string
+          created_at?: string
+          id?: string
+          new_data?: Json | null
+          old_data?: Json | null
+          position_id: string
+          user_id: string
+        }
+        Update: {
+          action?: string
+          created_at?: string
+          id?: string
+          new_data?: Json | null
+          old_data?: Json | null
+          position_id?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       positions: {
         Row: {
           category: string | null

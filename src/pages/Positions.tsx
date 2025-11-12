@@ -7,12 +7,14 @@ import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
-import { Filter, Search, Loader2 } from "lucide-react";
+import { Filter, Search, Loader2, Download, Undo2, Redo2, Upload, Plus, History } from "lucide-react";
 import FloorPlan from "@/components/FloorPlan";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { format } from "date-fns";
+import { exportPositionsToExcel } from "@/lib/exportToExcel";
+import { usePositionHistory } from "@/hooks/usePositionHistory";
 
 export type Position = {
   id: string;
@@ -51,11 +53,27 @@ const Positions = () => {
   const [selectedPosition, setSelectedPosition] = useState<Position | null>(null);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [createMode, setCreateMode] = useState(false);
+  const [createDialogOpen, setCreateDialogOpen] = useState(false);
+  const [newPositionCoords, setNewPositionCoords] = useState<{ x: number; y: number } | null>(null);
+  const [backgroundImage, setBackgroundImage] = useState<string | null>(null);
+  const [uploadingImage, setUploadingImage] = useState(false);
+  const [historyDialogOpen, setHistoryDialogOpen] = useState(false);
+  
+  const { undo, redo, canUndo, canRedo, history } = usePositionHistory(selectedStore);
 
   useEffect(() => {
     fetchStores();
     fetchPositions();
   }, []);
+
+  useEffect(() => {
+    if (selectedStore !== "all") {
+      fetchFloorplanImage();
+    } else {
+      setBackgroundImage(null);
+    }
+  }, [selectedStore]);
 
   const fetchStores = async () => {
     try {
@@ -94,6 +112,157 @@ const Positions = () => {
       });
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchFloorplanImage = async () => {
+    if (selectedStore === "all") return;
+
+    try {
+      const { data, error } = await supabase
+        .from("floorplan_images")
+        .select("*")
+        .eq("store_id", selectedStore)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (error) throw error;
+      setBackgroundImage(data?.image_url || null);
+    } catch (error: any) {
+      console.error("Error fetching floorplan image:", error);
+    }
+  };
+
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!e.target.files || !e.target.files[0] || selectedStore === "all") return;
+    
+    const file = e.target.files[0];
+    
+    // Validate file type
+    const validTypes = ['image/png', 'image/jpeg', 'image/jpg', 'image/svg+xml'];
+    if (!validTypes.includes(file.type)) {
+      toast({
+        variant: "destructive",
+        title: "Neispravan format",
+        description: "Molimo koristite PNG, JPG ili SVG format",
+      });
+      return;
+    }
+
+    setUploadingImage(true);
+
+    try {
+      // Upload to storage
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${selectedStore}_${Date.now()}.${fileExt}`;
+      const filePath = `${fileName}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from('floorplans')
+        .upload(filePath, file);
+
+      if (uploadError) throw uploadError;
+
+      // Get public URL
+      const { data: { publicUrl } } = supabase.storage
+        .from('floorplans')
+        .getPublicUrl(filePath);
+
+      // Save to database
+      const { error: dbError } = await supabase
+        .from('floorplan_images')
+        .insert({
+          store_id: selectedStore,
+          image_url: publicUrl,
+          uploaded_by: user?.id || '',
+        });
+
+      if (dbError) throw dbError;
+
+      setBackgroundImage(publicUrl);
+      toast({
+        title: "Slika učitana",
+        description: "Slika floorplana je uspešno učitana",
+      });
+    } catch (error: any) {
+      toast({
+        variant: "destructive",
+        title: "Greška",
+        description: error.message || "Nije moguće učitati sliku",
+      });
+    } finally {
+      setUploadingImage(false);
+    }
+  };
+
+  const handlePositionCreate = (x: number, y: number) => {
+    setNewPositionCoords({ x, y });
+    setCreateDialogOpen(true);
+  };
+
+  const handleCreateNewPosition = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (!newPositionCoords || selectedStore === "all") return;
+
+    const formData = new FormData(e.currentTarget);
+    const positionNumber = formData.get("position_number") as string;
+    const format = formData.get("format") as string;
+    const displayType = formData.get("display_type") as string;
+
+    try {
+      const { error } = await supabase.from("positions").insert({
+        store_id: selectedStore,
+        position_number: positionNumber,
+        format,
+        display_type: displayType,
+        x: newPositionCoords.x,
+        y: newPositionCoords.y,
+        width: 100,
+        height: 80,
+        status: "free",
+      });
+
+      if (error) throw error;
+
+      toast({
+        title: "Pozicija kreirana",
+        description: "Nova pozicija je uspešno kreirana",
+      });
+
+      setCreateDialogOpen(false);
+      setCreateMode(false);
+      setNewPositionCoords(null);
+      fetchPositions();
+    } catch (error: any) {
+      toast({
+        variant: "destructive",
+        title: "Greška",
+        description: error.message || "Nije moguće kreirati poziciju",
+      });
+    }
+  };
+
+  const handleExport = () => {
+    const storeName = stores.find(s => s.id === selectedStore)?.name;
+    exportPositionsToExcel(filteredPositions, storeName);
+    toast({
+      title: "Izvoz uspešan",
+      description: "Excel fajl je preuzet",
+    });
+  };
+
+  const handleUndo = async () => {
+    const success = await undo();
+    if (success) {
+      fetchPositions();
+    }
+  };
+
+  const handleRedo = async () => {
+    const success = await redo();
+    if (success) {
+      fetchPositions();
     }
   };
 
@@ -164,9 +333,10 @@ const Positions = () => {
         <p className="text-muted-foreground">Upravljanje dodatnim prodajnim pozicijama</p>
       </div>
 
-      {/* Filters */}
+      {/* Filters and Actions */}
       <Card className="p-4">
-        <div className="flex flex-wrap gap-4 items-center">
+        <div className="flex flex-wrap gap-4 items-center justify-between">
+          <div className="flex flex-wrap gap-4 items-center flex-1">
           <div className="flex-1 min-w-[200px]">
             <div className="relative">
               <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
@@ -218,6 +388,82 @@ const Positions = () => {
             </Button>
           </div>
         </div>
+
+        {/* Admin Actions */}
+        {isAdmin && (
+          <div className="flex flex-wrap gap-2 mt-4 pt-4 border-t">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleExport}
+              disabled={filteredPositions.length === 0}
+            >
+              <Download className="h-4 w-4 mr-2" />
+              Excel izvoz
+            </Button>
+            
+            {selectedStore !== "all" && (
+              <>
+                <Button
+                  variant={createMode ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setCreateMode(!createMode)}
+                >
+                  <Plus className="h-4 w-4 mr-2" />
+                  {createMode ? "Otkaži kreiranje" : "Kreiraj poziciju"}
+                </Button>
+                
+                <div className="relative">
+                  <input
+                    type="file"
+                    accept="image/png,image/jpeg,image/jpg,image/svg+xml"
+                    onChange={handleImageUpload}
+                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                    disabled={uploadingImage}
+                  />
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={uploadingImage}
+                  >
+                    <Upload className="h-4 w-4 mr-2" />
+                    {uploadingImage ? "Učitavanje..." : "Učitaj floorplan"}
+                  </Button>
+                </div>
+              </>
+            )}
+            
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleUndo}
+              disabled={!canUndo}
+            >
+              <Undo2 className="h-4 w-4 mr-2" />
+              Undo
+            </Button>
+            
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleRedo}
+              disabled={!canRedo}
+            >
+              <Redo2 className="h-4 w-4 mr-2" />
+              Redo
+            </Button>
+            
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setHistoryDialogOpen(true)}
+            >
+              <History className="h-4 w-4 mr-2" />
+              Istorija ({history.length})
+            </Button>
+          </div>
+        )}
+      </div>
       </Card>
 
       {/* Content */}
@@ -285,10 +531,104 @@ const Positions = () => {
               }}
               onPositionHover={setHoveredPosition}
               onPositionsUpdate={fetchPositions}
+              storeId={selectedStore}
+              backgroundImage={backgroundImage}
+              createMode={createMode}
+              onPositionCreate={handlePositionCreate}
             />
           </Card>
         )}
       </div>
+
+      {/* Create Position Dialog */}
+      <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Nova pozicija</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleCreateNewPosition} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="position_number">Broj pozicije *</Label>
+              <Input
+                id="position_number"
+                name="position_number"
+                required
+                placeholder="npr. A1"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="format">Format *</Label>
+              <Input
+                id="format"
+                name="format"
+                required
+                placeholder="npr. Gondola"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="display_type">Tip *</Label>
+              <Input
+                id="display_type"
+                name="display_type"
+                required
+                placeholder="npr. Shelf"
+              />
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setCreateDialogOpen(false)}
+              >
+                Otkaži
+              </Button>
+              <Button type="submit">Kreiraj</Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* History Dialog */}
+      <Dialog open={historyDialogOpen} onOpenChange={setHistoryDialogOpen}>
+        <DialogContent className="max-w-3xl max-h-[80vh] overflow-auto">
+          <DialogHeader>
+            <DialogTitle>Istorija promena</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-2">
+            {history.length === 0 ? (
+              <p className="text-sm text-muted-foreground text-center py-8">
+                Nema istorije promena
+              </p>
+            ) : (
+              history.map((entry) => {
+                const position = positions.find(p => p.id === entry.position_id);
+                return (
+                  <Card key={entry.id} className="p-3">
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <p className="font-semibold text-sm">
+                          {entry.action === "move" ? "Pomeranje" : 
+                           entry.action === "resize" ? "Promena veličine" : 
+                           entry.action}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          Pozicija: {position?.position_number || "Nepoznato"}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          {format(new Date(entry.created_at), "dd.MM.yyyy HH:mm")}
+                        </p>
+                      </div>
+                      <Badge variant="outline" className="text-xs">
+                        {entry.action}
+                      </Badge>
+                    </div>
+                  </Card>
+                );
+              })
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Edit Dialog */}
       <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>

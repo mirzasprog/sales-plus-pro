@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { Position } from "@/pages/Positions";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
@@ -12,6 +12,11 @@ interface FloorPlanProps {
   onPositionClick: (id: string) => void;
   onPositionHover: (id: string | null) => void;
   onPositionsUpdate: () => void;
+  storeId: string;
+  backgroundImage?: string | null;
+  createMode?: boolean;
+  onPositionCreate?: (x: number, y: number) => void;
+  onHistoryChange?: (oldData: any, newData: any, positionId: string) => void;
 }
 
 const FloorPlan = ({
@@ -21,9 +26,14 @@ const FloorPlan = ({
   onPositionClick,
   onPositionHover,
   onPositionsUpdate,
+  storeId,
+  backgroundImage,
+  createMode = false,
+  onPositionCreate,
+  onHistoryChange,
 }: FloorPlanProps) => {
   const { toast } = useToast();
-  const { isAdmin } = useAuth();
+  const { isAdmin, user } = useAuth();
   const [draggingPosition, setDraggingPosition] = useState<string | null>(null);
   const [resizingPosition, setResizingPosition] = useState<string | null>(null);
   const [resizeHandle, setResizeHandle] = useState<"se" | "sw" | "ne" | "nw" | null>(null);
@@ -141,6 +151,17 @@ const FloorPlan = ({
           const newX = Math.max(20, Math.min(780 - Number(position.width), Number(position.x) + dx));
           const newY = Math.max(20, Math.min(580 - Number(position.height), Number(position.y) + dy));
 
+          // Save to history
+          if (onHistoryChange && user) {
+            await supabase.from("position_history").insert({
+              position_id: draggingPosition,
+              user_id: user.id,
+              action: "move",
+              old_data: { x: position.x, y: position.y },
+              new_data: { x: newX, y: newY },
+            });
+          }
+
           const { error } = await supabase
             .from("positions")
             .update({ x: newX, y: newY })
@@ -180,6 +201,17 @@ const FloorPlan = ({
             newY = Number(position.y) + dy;
           }
 
+          // Save to history
+          if (onHistoryChange && user) {
+            await supabase.from("position_history").insert({
+              position_id: resizingPosition,
+              user_id: user.id,
+              action: "resize",
+              old_data: { x: position.x, y: position.y, width: position.width, height: position.height },
+              new_data: { x: newX, y: newY, width: newWidth, height: newHeight },
+            });
+          }
+
           const { error } = await supabase
             .from("positions")
             .update({ 
@@ -214,12 +246,31 @@ const FloorPlan = ({
     }
   };
 
+  const handleSvgClick = (e: React.MouseEvent<SVGSVGElement>) => {
+    if (!isAdmin || !createMode || !onPositionCreate) return;
+    if (draggingPosition || resizingPosition) return;
+
+    const coords = getSvgCoordinates(e);
+    
+    // Check if clicked on existing position
+    const target = e.target as SVGElement;
+    if (target.hasAttribute('data-position-id')) return;
+
+    onPositionCreate(coords.x, coords.y);
+  };
+
   return (
     <div className="relative w-full h-full min-h-[500px] bg-muted/20 rounded-lg overflow-hidden">
-      {isAdmin && (
+      {isAdmin && !createMode && (
         <div className="absolute top-4 left-4 z-10 bg-primary/90 text-primary-foreground px-4 py-2 rounded-lg shadow-lg animate-fade-in">
           <p className="text-sm font-semibold">🎯 Admin režim</p>
           <p className="text-xs opacity-90">Prevuci pozicije ili promeni veličinu</p>
+        </div>
+      )}
+      {isAdmin && createMode && (
+        <div className="absolute top-4 left-4 z-10 bg-accent/90 text-accent-foreground px-4 py-2 rounded-lg shadow-lg animate-fade-in">
+          <p className="text-sm font-semibold">➕ Režim kreiranja</p>
+          <p className="text-xs opacity-90">Klikni na plan za kreiranje nove pozicije</p>
         </div>
       )}
       <svg 
@@ -227,18 +278,34 @@ const FloorPlan = ({
         width="100%" 
         height="100%" 
         viewBox="0 0 800 600" 
-        className="border border-border rounded-lg"
+        className={cn(
+          "border border-border rounded-lg",
+          createMode && "cursor-crosshair"
+        )}
         onMouseMove={handleMouseMove}
         onMouseUp={handleMouseUp}
         onMouseLeave={handleMouseUp}
+        onClick={handleSvgClick}
       >
-        {/* Floor plan background grid */}
+        {/* Floor plan background */}
         <defs>
           <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
             <path d="M 40 0 L 0 0 0 40" fill="none" stroke="hsl(var(--border))" strokeWidth="0.5" />
           </pattern>
         </defs>
-        <rect width="800" height="600" fill="url(#grid)" />
+        {backgroundImage ? (
+          <image
+            href={backgroundImage}
+            x="0"
+            y="0"
+            width="800"
+            height="600"
+            preserveAspectRatio="xMidYMid slice"
+            opacity="0.3"
+          />
+        ) : (
+          <rect width="800" height="600" fill="url(#grid)" />
+        )}
         
         {/* Store outline */}
         <rect
