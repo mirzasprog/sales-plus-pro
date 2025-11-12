@@ -226,7 +226,7 @@ export const FloorPlanEditor = ({ storeId, storeName, onLayoutSaved, stores = []
     const objData = (selectedObject as any).customData || {};
     
     try {
-      const { error } = await supabase.from("positions").insert({
+      const { error } = await supabase.from("positions").upsert({
         store_id: storeId,
         position_number: equipmentDetails.position_number,
         format: equipmentDetails.format || objData.label || "Oprema",
@@ -241,6 +241,8 @@ export const FloorPlanEditor = ({ storeId, storeName, onLayoutSaved, stores = []
         purpose: equipmentDetails.purpose || null,
         department: equipmentDetails.department || null,
         category: equipmentDetails.category || null,
+      }, {
+        onConflict: "store_id,position_number"
       });
 
       if (error) throw error;
