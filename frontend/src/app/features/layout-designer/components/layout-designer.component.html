@@ -1,0 +1,23 @@
+<section class="designer">
+  <aside class="palette card">
+    <h2>Elementi</h2>
+    <button type="button" (click)="addElement('Gondola')">Dodaj gondolu</button>
+    <button type="button" (click)="addElement('Promo')">Dodaj promo poziciju</button>
+    <button type="button" (click)="addElement('Stand')">Dodaj stalak</button>
+  </aside>
+
+  <div class="canvas card">
+    <svg width="100%" height="100%" preserveAspectRatio="xMidYMid meet">
+      <defs>
+        <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+          <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#e2e8f0" stroke-width="1"></path>
+        </pattern>
+      </defs>
+      <rect width="100%" height="100%" fill="url(#grid)"></rect>
+    </svg>
+    <div class="draggable" *ngFor="let element of elements$ | async" cdkDrag [cdkDragFreeDragPosition]="{ x: element.x, y: element.y }" (cdkDragEnded)="dragEnded($event, element)" [style.width.px]="element.width" [style.height.px]="element.height">
+      <strong>{{ element.label }}</strong>
+      <span>{{ element.type }}</span>
+    </div>
+  </div>
+</section>

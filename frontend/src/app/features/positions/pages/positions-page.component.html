@@ -1,0 +1,18 @@
+<section class="positions">
+  <form [formGroup]="filterForm" class="filter">
+    <input type="search" placeholder="Pretraži pozicije..." formControlName="search" />
+  </form>
+
+  <div class="position-list" *ngIf="positions$ | async as positions">
+    <article class="card position" *ngFor="let position of positions">
+      <header>
+        <h2>{{ position.name }}</h2>
+        <app-position-status-badge [status]="position.status"></app-position-status-badge>
+      </header>
+      <p class="meta">{{ position.retailObjectName }} • {{ position.positionType }}</p>
+      <footer>
+        <button type="button" (click)="markInactive(position)">Označi kao neaktivno</button>
+      </footer>
+    </article>
+  </div>
+</section>
