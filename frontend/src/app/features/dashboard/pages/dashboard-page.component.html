@@ -1,0 +1,15 @@
+<section class="dashboard" *ngIf="summary$ | async as summary">
+  <div class="kpi-grid">
+    <app-kpi-card label="Ukupno pozicija" [value]="summary.totalPositions"></app-kpi-card>
+    <app-kpi-card label="Slobodno" [value]="summary.available" accent="success"></app-kpi-card>
+    <app-kpi-card label="Zauzeto" [value]="summary.occupied" accent="danger"></app-kpi-card>
+    <app-kpi-card label="Ističe uskoro" [value]="summary.expiringSoon" accent="warning"></app-kpi-card>
+    <app-kpi-card label="Neaktivno" [value]="summary.inactive"></app-kpi-card>
+    <app-kpi-card label="Prihod YTD" [value]="summary.revenueYtd | currency:'EUR'" accent="success"></app-kpi-card>
+  </div>
+
+  <div class="chart-card card" *ngIf="chartData$ | async as chartData">
+    <h2>Status pozicija</h2>
+    <ngx-charts-pie-chart [results]="chartData" [legend]="true" [animations]="true" [labels]="true"></ngx-charts-pie-chart>
+  </div>
+</section>

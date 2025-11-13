@@ -1,0 +1,40 @@
+.kpi {
+  @extend .card;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  border-left: 4px solid transparent;
+  transition: transform 0.3s ease;
+}
+
+.kpi:hover {
+  transform: translateY(-4px);
+}
+
+.kpi__label {
+  text-transform: uppercase;
+  font-size: 12px;
+  letter-spacing: 1.2px;
+  color: #64748b;
+}
+
+.kpi__value {
+  font-size: 28px;
+  font-weight: 700;
+}
+
+.accent-primary {
+  border-color: var(--primary-color);
+}
+
+.accent-success {
+  border-color: var(--success-color);
+}
+
+.accent-warning {
+  border-color: var(--warning-color);
+}
+
+.accent-danger {
+  border-color: var(--danger-color);
+}
