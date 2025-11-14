@@ -1,6 +1,19 @@
 import * as XLSX from 'xlsx';
-import { Position } from '@/pages/Positions';
 import { format } from 'date-fns';
+
+import { Position } from '@/pages/Positions';
+
+export interface ReportColumn {
+  key: string;
+  header: string;
+}
+
+export interface ReportSection {
+  key: string;
+  title: string;
+  columns: ReportColumn[];
+  rows: Array<Record<string, string | number | null | undefined>>;
+}
 
 export const exportPositionsToExcel = (positions: Position[], storeName?: string) => {
   // Prepare data for Excel
@@ -58,4 +71,40 @@ export const exportPositionsToExcel = (positions: Position[], storeName?: string
 
   // Save file
   XLSX.writeFile(wb, filename);
+};
+
+export const exportReportsToExcel = (sections: ReportSection[], storeName?: string) => {
+  const workbook = XLSX.utils.book_new();
+
+  sections.forEach((section) => {
+    if (section.rows.length === 0) {
+      return;
+    }
+
+    const headers = section.columns.map((column) => column.header);
+    const sheetData = section.rows.map((row) => {
+      const entry: Record<string, string | number> = {};
+      section.columns.forEach((column) => {
+        const raw = row[column.key];
+        entry[column.header] = raw === undefined || raw === null ? '' : raw;
+      });
+      return entry;
+    });
+
+    const worksheet = XLSX.utils.json_to_sheet(sheetData, { header: headers });
+    worksheet['!cols'] = section.columns.map(() => ({ wch: 18 }));
+
+    const sanitizedTitle = section.title.replace(/[^\w\u0080-\uFFFF]+/g, ' ').trim() || 'Izveštaj';
+    const sheetName = sanitizedTitle.slice(0, 31);
+    XLSX.utils.book_append_sheet(workbook, worksheet, sheetName);
+  });
+
+  if (workbook.SheetNames.length === 0) {
+    const worksheet = XLSX.utils.aoa_to_sheet([["Nema dostupnih podataka"]]);
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Izveštaj');
+  }
+
+  const timestamp = format(new Date(), 'yyyy-MM-dd_HH-mm');
+  const filename = `izvestaji_${storeName ? storeName + '_' : ''}${timestamp}.xlsx`;
+  XLSX.writeFile(workbook, filename);
 };
