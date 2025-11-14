@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -7,15 +7,42 @@ import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
-import { Filter, Search, Loader2, Download, Undo2, Redo2, Upload, Plus, History } from "lucide-react";
+import {
+  Filter,
+  Search,
+  Loader2,
+  Download,
+  Undo2,
+  Redo2,
+  Upload,
+  Plus,
+  History,
+  FileSpreadsheet,
+  FileText,
+  BarChart3,
+} from "lucide-react";
 import FloorPlan from "@/components/FloorPlan";
 import { FloorPlanEditor } from "@/components/FloorPlanEditor";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { format } from "date-fns";
-import { exportPositionsToExcel } from "@/lib/exportToExcel";
+import {
+  exportPositionsToExcel,
+  exportReportsToExcel,
+  type ReportSection,
+} from "@/lib/exportToExcel";
+import { exportPositionsToPdf, exportReportsToPdf } from "@/lib/exportToPdf";
 import { usePositionHistory } from "@/hooks/usePositionHistory";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 export type Position = {
   id: string;
@@ -362,15 +389,6 @@ const Positions = () => {
     }
   };
 
-  const handleExport = () => {
-    const storeName = stores.find(s => s.id === selectedStore)?.name;
-    exportPositionsToExcel(filteredPositions, storeName);
-    toast({
-      title: "Izvoz uspešan",
-      description: "Excel fajl je preuzet",
-    });
-  };
-
   const handleUndo = async () => {
     const success = await undo();
     if (success) {
@@ -388,11 +406,254 @@ const Positions = () => {
   const filteredPositions = positions.filter((pos) => {
     if (selectedStore !== "all" && pos.store_id !== selectedStore) return false;
     if (filter !== "all" && pos.status !== filter) return false;
-    if (searchQuery && !Object.values(pos).some((val) => 
+    if (searchQuery && !Object.values(pos).some((val) =>
       String(val).toLowerCase().includes(searchQuery.toLowerCase())
     )) return false;
     return true;
   });
+
+  const storeName = selectedStore !== "all"
+    ? stores.find((store) => store.id === selectedStore)?.name
+    : undefined;
+
+  const occupancySummary = useMemo(() => {
+    const summary = {
+      total: filteredPositions.length,
+      occupied: 0,
+      free: 0,
+      partial: 0,
+    };
+
+    filteredPositions.forEach((position) => {
+      if (position.status === "occupied") {
+        summary.occupied += 1;
+      } else if (position.status === "free") {
+        summary.free += 1;
+      } else {
+        summary.partial += 1;
+      }
+    });
+
+    return summary;
+  }, [filteredPositions]);
+
+  const reportSections = useMemo<ReportSection[]>(() => {
+    const distributionColumns = (
+      labelHeader: string,
+    ) => ([
+      { key: "label", header: labelHeader },
+      { key: "total", header: "Ukupno" },
+      { key: "occupied", header: "Zauzeto" },
+      { key: "free", header: "Slobodno" },
+      { key: "partial", header: "Delimično" },
+      { key: "occupancyRate", header: "Stopa zauzetosti" },
+    ]);
+
+    const toRows = (
+      map: Map<string, { label: string; total: number; occupied: number; free: number; partial: number }>,
+    ) => Array.from(map.values())
+      .sort((a, b) => b.total - a.total)
+      .map((item) => ({
+        label: item.label,
+        total: item.total,
+        occupied: item.occupied,
+        free: item.free,
+        partial: item.partial,
+        occupancyRate: item.total > 0 ? `${Math.round((item.occupied / item.total) * 100)}%` : "0%",
+      }));
+
+    const storeMap = new Map<string, { label: string; total: number; occupied: number; free: number; partial: number }>();
+    const formatMap = new Map<string, { label: string; total: number; occupied: number; free: number; partial: number }>();
+    const displayMap = new Map<string, { label: string; total: number; occupied: number; free: number; partial: number }>();
+
+    filteredPositions.forEach((position) => {
+      const storeLabel = stores.find((store) => store.id === position.store_id)?.name || `Prodavnica ${position.store_id}`;
+      const formatLabel = position.format?.trim() || "Nepoznato";
+      const displayLabel = position.display_type?.trim() || "Nepoznato";
+
+      const ensureEntry = (
+        map: Map<string, { label: string; total: number; occupied: number; free: number; partial: number }>,
+        key: string,
+        label: string,
+      ) => {
+        if (!map.has(key)) {
+          map.set(key, { label, total: 0, occupied: 0, free: 0, partial: 0 });
+        }
+        return map.get(key)!;
+      };
+
+      const incrementStatus = (
+        entry: { total: number; occupied: number; free: number; partial: number },
+        status: string,
+      ) => {
+        entry.total += 1;
+        if (status === "occupied") {
+          entry.occupied += 1;
+        } else if (status === "free") {
+          entry.free += 1;
+        } else {
+          entry.partial += 1;
+        }
+      };
+
+      incrementStatus(ensureEntry(storeMap, position.store_id, storeLabel), position.status);
+      incrementStatus(ensureEntry(formatMap, formatLabel, formatLabel), position.status);
+      incrementStatus(ensureEntry(displayMap, displayLabel, displayLabel), position.status);
+    });
+
+    const sections: ReportSection[] = [
+      {
+        key: "store",
+        title: "Raspodela po prodavnicama",
+        columns: distributionColumns("Prodavnica"),
+        rows: toRows(storeMap),
+      },
+      {
+        key: "format",
+        title: "Raspodela po formatima",
+        columns: distributionColumns("Format"),
+        rows: toRows(formatMap),
+      },
+      {
+        key: "display",
+        title: "Raspodela po tipu displeja",
+        columns: distributionColumns("Tip displeja"),
+        rows: toRows(displayMap),
+      },
+    ];
+
+    const statusCounts = filteredPositions.reduce(
+      (acc, position) => {
+        if (position.status === "occupied") {
+          acc.occupied += 1;
+        } else if (position.status === "free") {
+          acc.free += 1;
+        } else {
+          acc.partial += 1;
+        }
+        return acc;
+      },
+      { occupied: 0, free: 0, partial: 0 },
+    );
+
+    const totalPositions = filteredPositions.length || 1;
+    const statusRows = [
+      {
+        label: "Zauzeto",
+        count: statusCounts.occupied,
+        share: `${Math.round((statusCounts.occupied / totalPositions) * 100)}%`,
+      },
+      {
+        label: "Slobodno",
+        count: statusCounts.free,
+        share: `${Math.round((statusCounts.free / totalPositions) * 100)}%`,
+      },
+      {
+        label: "Delimično",
+        count: statusCounts.partial,
+        share: `${Math.round((statusCounts.partial / totalPositions) * 100)}%`,
+      },
+    ].filter((row) => row.count > 0);
+
+    sections.push({
+      key: "status",
+      title: "Pregled po statusu",
+      columns: [
+        { key: "label", header: "Status" },
+        { key: "count", header: "Broj pozicija" },
+        { key: "share", header: "Udeo" },
+      ],
+      rows: statusRows,
+    });
+
+    return sections;
+  }, [filteredPositions, stores]);
+
+  const hasReportData = reportSections.some((section) => section.rows.length > 0);
+  const defaultReportTab = reportSections.find((section) => section.rows.length > 0)?.key
+    ?? reportSections[0]?.key
+    ?? "store";
+
+  const handleExportExcel = () => {
+    if (filteredPositions.length === 0) {
+      toast({
+        variant: "destructive",
+        title: "Nema podataka za izvoz",
+        description: "Filtrirane pozicije su prazne.",
+      });
+      return;
+    }
+
+    exportPositionsToExcel(filteredPositions, storeName);
+    toast({
+      title: "Izvoz uspešan",
+      description: "Excel fajl sa pozicijama je preuzet.",
+    });
+  };
+
+  const handleExportPdf = () => {
+    if (filteredPositions.length === 0) {
+      toast({
+        variant: "destructive",
+        title: "Nema podataka za izvoz",
+        description: "Filtrirane pozicije su prazne.",
+      });
+      return;
+    }
+
+    exportPositionsToPdf(filteredPositions, storeName);
+    toast({
+      title: "PDF kreiran",
+      description: "PDF izveštaj sa pozicijama je preuzet.",
+    });
+  };
+
+  const handleExportReportsExcel = () => {
+    const activeSections = reportSections.filter((section) => section.rows.length > 0);
+    if (activeSections.length === 0) {
+      toast({
+        variant: "destructive",
+        title: "Nema podataka za izvoz",
+        description: "Napredni izveštaji ne sadrže podatke.",
+      });
+      return;
+    }
+
+    exportReportsToExcel(activeSections, storeName ?? "Sve prodavnice");
+    toast({
+      title: "Izveštaji izvezeni",
+      description: "Excel fajl sa agregiranim izveštajima je preuzet.",
+    });
+  };
+
+  const handleExportReportsPdf = () => {
+    const activeSections = reportSections.filter((section) => section.rows.length > 0);
+    if (activeSections.length === 0) {
+      toast({
+        variant: "destructive",
+        title: "Nema podataka za izvoz",
+        description: "Napredni izveštaji ne sadrže podatke.",
+      });
+      return;
+    }
+
+    exportReportsToPdf(activeSections, storeName ?? "Sve prodavnice");
+    toast({
+      title: "PDF izveštaj spreman",
+      description: "PDF fajl sa agregiranim izveštajima je preuzet.",
+    });
+  };
+
+  const resolveCellValue = (
+    row: Record<string, string | number | null | undefined>,
+    key: string,
+  ) => {
+    const value = row[key];
+    if (value === null || value === undefined) {
+      return "-";
+    }
+    return value;
+  };
 
   const handleUpdatePosition = async () => {
     if (!selectedPosition) return;
@@ -533,16 +794,52 @@ const Positions = () => {
          {/* Admin Actions */}
         {isAdmin && (
           <div className="flex flex-col sm:flex-row flex-wrap gap-2 pt-3 md:pt-4 border-t">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleExport}
-              disabled={filteredPositions.length === 0}
-              className="w-full sm:w-auto"
-            >
-              <Download className="h-4 w-4 mr-2" />
-              Excel izvoz
-            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="w-full sm:w-auto"
+                  disabled={filteredPositions.length === 0 && !hasReportData}
+                >
+                  <Download className="h-4 w-4 mr-2" />
+                  Izvoz
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className="w-56">
+                <DropdownMenuLabel>Podaci o pozicijama</DropdownMenuLabel>
+                <DropdownMenuItem
+                  onSelect={() => handleExportExcel()}
+                  disabled={filteredPositions.length === 0}
+                >
+                  <FileSpreadsheet className="mr-2 h-4 w-4" />
+                  Excel (.xlsx)
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onSelect={() => handleExportPdf()}
+                  disabled={filteredPositions.length === 0}
+                >
+                  <FileText className="mr-2 h-4 w-4" />
+                  PDF (.pdf)
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuLabel>Napredni izveštaji</DropdownMenuLabel>
+                <DropdownMenuItem
+                  onSelect={() => handleExportReportsExcel()}
+                  disabled={!hasReportData}
+                >
+                  <FileSpreadsheet className="mr-2 h-4 w-4" />
+                  Izvezi izveštaje (.xlsx)
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onSelect={() => handleExportReportsPdf()}
+                  disabled={!hasReportData}
+                >
+                  <BarChart3 className="mr-2 h-4 w-4" />
+                  Izvezi izveštaje (.pdf)
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
             
             {selectedStore !== "all" && (
               <>
@@ -628,6 +925,73 @@ const Positions = () => {
         )}
       </div>
       </Card>
+
+      {reportSections.length > 0 && (
+        <Card className="p-3 md:p-4">
+          <div className="flex flex-col gap-4">
+            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-2">
+              <div>
+                <h2 className="text-lg font-semibold">Napredni izveštaji</h2>
+                <p className="text-sm text-muted-foreground">
+                  Detaljni pregled popunjenosti po prodavnicama, formatima i statusima.
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-2 text-sm">
+                <Badge variant="outline">Ukupno: {occupancySummary.total}</Badge>
+                <Badge variant="destructive">Zauzeto: {occupancySummary.occupied}</Badge>
+                <Badge variant="success">Slobodno: {occupancySummary.free}</Badge>
+                {occupancySummary.partial > 0 && (
+                  <Badge variant="outline">Delimično: {occupancySummary.partial}</Badge>
+                )}
+              </div>
+            </div>
+
+            <Tabs defaultValue={defaultReportTab} className="w-full">
+              <TabsList className="flex flex-wrap gap-2">
+                {reportSections.map((section) => (
+                  <TabsTrigger key={section.key} value={section.key} disabled={section.rows.length === 0}>
+                    {section.title}
+                  </TabsTrigger>
+                ))}
+              </TabsList>
+              {reportSections.map((section) => (
+                <TabsContent key={section.key} value={section.key} className="mt-4">
+                  {section.rows.length === 0 ? (
+                    <div className="py-6 text-center text-sm text-muted-foreground">
+                      Nema podataka za odabrane filtere.
+                    </div>
+                  ) : (
+                    <div className="overflow-x-auto">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            {section.columns.map((column) => (
+                              <TableHead key={column.key} className="whitespace-nowrap">
+                                {column.header}
+                              </TableHead>
+                            ))}
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {section.rows.map((row, index) => (
+                            <TableRow key={`${section.key}-${index}`}>
+                              {section.columns.map((column) => (
+                                <TableCell key={column.key} className="whitespace-nowrap">
+                                  {resolveCellValue(row, column.key)}
+                                </TableCell>
+                              ))}
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  )}
+                </TabsContent>
+              ))}
+            </Tabs>
+          </div>
+        </Card>
+      )}
 
       {/* Floor Plan Editor Dialog */}
       <Dialog open={editorMode && selectedStore !== "all"} onOpenChange={(open) => setEditorMode(open)}>

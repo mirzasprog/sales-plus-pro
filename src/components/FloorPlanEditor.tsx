@@ -3,12 +3,14 @@ import { Canvas as FabricCanvas, Line, Rect, FabricText, Circle, FabricObject, A
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Badge } from "@/components/ui/badge";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
-import { Save, Trash2, Copy, Undo, Redo, Type, ZoomIn, ZoomOut, Square } from "lucide-react";
+import { Save, Trash2, Copy, Undo, Redo, Type, ZoomIn, ZoomOut, Square, Loader2, Eraser } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
+import { format } from "date-fns";
 
 interface FloorPlanEditorProps {
   storeId: string;
@@ -29,6 +31,36 @@ const EQUIPMENT_TYPES = [
 const SCALE_FACTOR = 0.05; // 1mm = 0.05px for display
 const GRID_SIZE_MM = 50; // Grid na svakih 50mm
 const GRID_SIZE_PX = GRID_SIZE_MM * SCALE_FACTOR; // Grid u pixelima
+
+type LayoutMetadata = {
+  id: string;
+  created_at?: string | null;
+  updated_at?: string | null;
+  elementCount: number;
+  storeWidth: number;
+  storeHeight: number;
+};
+
+const isGridLine = (object: FabricObject) =>
+  object.type === "line" && object.selectable === false && object.evented === false && (object.strokeWidth ?? 0) <= 0.5;
+
+const isBoundary = (object: FabricObject) =>
+  object.type === "rect" && object.selectable === false && (object.strokeWidth ?? 0) === 3;
+
+const countEditableObjects = (canvas: FabricCanvas) =>
+  canvas
+    .getObjects()
+    .filter((object) => !isGridLine(object) && !isBoundary(object))
+    .length;
+
+const formatTimestamp = (value?: string | null) => {
+  if (!value) return "Nepoznato";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return "Nepoznato";
+  }
+  return format(date, "dd.MM.yyyy HH:mm");
+};
 
 export const FloorPlanEditor = ({ storeId, storeName, onLayoutSaved, stores = [] }: FloorPlanEditorProps) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -67,6 +99,11 @@ export const FloorPlanEditor = ({ storeId, storeName, onLayoutSaved, stores = []
   const wallStartPoint = useRef<{ x: number; y: number } | null>(null);
   const { toast } = useToast();
   const { user, isAdmin } = useAuth();
+  const [layoutMetadata, setLayoutMetadata] = useState<LayoutMetadata | null>(null);
+  const [dialogStep, setDialogStep] = useState<"overview" | "dimensions">("overview");
+  const [pendingReset, setPendingReset] = useState(false);
+  const [isDeletingLayout, setIsDeletingLayout] = useState(false);
+  const [isSavingLayout, setIsSavingLayout] = useState(false);
 
   // Snap to grid funkcija
   const snapToGrid = (value: number) => {
@@ -76,11 +113,13 @@ export const FloorPlanEditor = ({ storeId, storeName, onLayoutSaved, stores = []
   // Funkcija za crtanje grid-a
   const drawGrid = (canvas: FabricCanvas, width: number, height: number) => {
     const gridSize = GRID_SIZE_PX;
-    
-    // Crtaj vertikalne linije
+
+    const existingGrid = canvas.getObjects().filter(isGridLine);
+    existingGrid.forEach((object) => canvas.remove(object));
+
     for (let i = 0; i <= width; i += gridSize) {
       const line = new Line([i, 0, i, height], {
-        stroke: '#e0e0e0',
+        stroke: "#e0e0e0",
         strokeWidth: 0.5,
         selectable: false,
         evented: false,
@@ -88,11 +127,10 @@ export const FloorPlanEditor = ({ storeId, storeName, onLayoutSaved, stores = []
       canvas.add(line);
       canvas.sendObjectToBack(line);
     }
-    
-    // Crtaj horizontalne linije
+
     for (let i = 0; i <= height; i += gridSize) {
       const line = new Line([0, i, width, i], {
-        stroke: '#e0e0e0',
+        stroke: "#e0e0e0",
         strokeWidth: 0.5,
         selectable: false,
         evented: false,
@@ -108,7 +146,7 @@ export const FloorPlanEditor = ({ storeId, storeName, onLayoutSaved, stores = []
       try {
         const { data, error } = await supabase
           .from("floorplan_layouts")
-          .select("store_width, store_height")
+          .select("id, store_width, store_height, created_at, updated_at, layout_data")
           .eq("store_id", storeId)
           .order("created_at", { ascending: false })
           .limit(1)
@@ -122,14 +160,32 @@ export const FloorPlanEditor = ({ storeId, storeName, onLayoutSaved, stores = []
           const heightMm = Number(data.store_height) / SCALE_FACTOR;
           setStoreWidthMm(widthMm);
           setStoreHeightMm(heightMm);
+          const layoutObjects =
+            typeof data.layout_data === "object" && data.layout_data !== null
+              ? (data.layout_data as any).objects ?? []
+              : [];
+          setLayoutMetadata({
+            id: data.id,
+            created_at: data.created_at,
+            updated_at: data.updated_at,
+            elementCount: Array.isArray(layoutObjects) ? layoutObjects.length : 0,
+            storeWidth: Number(data.store_width) || widthMm * SCALE_FACTOR,
+            storeHeight: Number(data.store_height) || heightMm * SCALE_FACTOR,
+          });
+          setDialogStep("overview");
           setDimensionsDialogOpen(false);
+          setPendingReset(false);
         } else {
           // No layout, show dimensions dialog
           setDimensionsDialogOpen(true);
+          setDialogStep("dimensions");
+          setLayoutMetadata(null);
         }
       } catch (error) {
         console.error("Error checking layout:", error);
         setDimensionsDialogOpen(true);
+        setDialogStep("dimensions");
+        setLayoutMetadata(null);
       } finally {
         setIsLoadingLayout(false);
       }
@@ -279,7 +335,12 @@ export const FloorPlanEditor = ({ storeId, storeName, onLayoutSaved, stores = []
               });
               
               targetCanvas.renderAll();
-              saveHistory();
+              saveHistory(true);
+              setLayoutMetadata((prev) =>
+                prev
+                  ? { ...prev, elementCount: countEditableObjects(targetCanvas) }
+                  : prev,
+              );
               toast({
                 title: "Layout učitan",
                 description: `Postojeći nacrt učitan sa ${layoutData.objects.length} elemenata`,
@@ -287,22 +348,29 @@ export const FloorPlanEditor = ({ storeId, storeName, onLayoutSaved, stores = []
             });
           } else {
             console.log("No objects in layout data");
-            saveHistory();
+            saveHistory(true);
           }
         }
       } else {
         console.log("No existing layout found");
-        saveHistory();
+        saveHistory(true);
       }
     } catch (error) {
       console.error("Error loading layout:", error);
-      saveHistory();
+      saveHistory(true);
     }
   };
 
-  const saveHistory = () => {
+  const saveHistory = (reset = false) => {
     if (!fabricCanvas) return;
     const json = JSON.stringify(fabricCanvas.toJSON());
+
+    if (reset) {
+      setHistory([json]);
+      setHistoryStep(0);
+      return;
+    }
+
     const newHistory = history.slice(0, historyStep + 1);
     newHistory.push(json);
     setHistory(newHistory);
@@ -331,29 +399,73 @@ export const FloorPlanEditor = ({ storeId, storeName, onLayoutSaved, stores = []
     }
   };
 
-  const handleSetDimensions = () => {
-    setDimensionsDialogOpen(false);
-    if (fabricCanvas) {
-      const displayWidth = storeWidthMm * SCALE_FACTOR;
-      const displayHeight = storeHeightMm * SCALE_FACTOR;
-      fabricCanvas.setWidth(displayWidth);
-      fabricCanvas.setHeight(displayHeight);
-      drawStoreBoundary();
-      saveHistory();
-    }
+  const resetCanvas = (
+    targetCanvas?: FabricCanvas,
+    widthOverride?: number,
+    heightOverride?: number,
+  ) => {
+    const canvas = targetCanvas || fabricCanvas;
+    if (!canvas) return;
+
+    const width = widthOverride ?? storeWidthMm * SCALE_FACTOR;
+    const height = heightOverride ?? storeHeightMm * SCALE_FACTOR;
+
+    canvas.clear();
+    canvas.setBackgroundColor("#f8f9fa", () => canvas.renderAll());
+    drawGrid(canvas, width, height);
+    drawStoreBoundary(canvas, width, height);
+    canvas.renderAll();
   };
 
-  const drawStoreBoundary = () => {
-    if (!fabricCanvas) return;
-
+  const handleSetDimensions = () => {
     const displayWidth = storeWidthMm * SCALE_FACTOR;
     const displayHeight = storeHeightMm * SCALE_FACTOR;
+
+    if (fabricCanvas) {
+      fabricCanvas.setWidth(displayWidth);
+      fabricCanvas.setHeight(displayHeight);
+
+      if (pendingReset || !layoutMetadata) {
+        resetCanvas(fabricCanvas, displayWidth, displayHeight);
+        saveHistory(true);
+        setPendingReset(false);
+      } else {
+        drawGrid(fabricCanvas, displayWidth, displayHeight);
+        drawStoreBoundary(fabricCanvas, displayWidth, displayHeight);
+        fabricCanvas.renderAll();
+        saveHistory(true);
+      }
+
+      setLayoutMetadata((prev) =>
+        prev
+          ? { ...prev, storeWidth: displayWidth, storeHeight: displayHeight }
+          : prev,
+      );
+    }
+
+    setDialogStep("overview");
+    setDimensionsDialogOpen(false);
+  };
+
+  const drawStoreBoundary = (
+    targetCanvas?: FabricCanvas,
+    widthOverride?: number,
+    heightOverride?: number,
+  ) => {
+    const canvas = targetCanvas || fabricCanvas;
+    if (!canvas) return;
+
+    const displayWidth = widthOverride ?? storeWidthMm * SCALE_FACTOR;
+    const displayHeight = heightOverride ?? storeHeightMm * SCALE_FACTOR;
+
+    const existingBoundaries = canvas.getObjects().filter(isBoundary);
+    existingBoundaries.forEach((object) => canvas.remove(object));
 
     const boundary = new Rect({
       left: 10,
       top: 10,
-      width: displayWidth - 20,
-      height: displayHeight - 20,
+      width: Math.max(0, displayWidth - 20),
+      height: Math.max(0, displayHeight - 20),
       fill: "transparent",
       stroke: "#000000",
       strokeWidth: 3,
@@ -361,8 +473,91 @@ export const FloorPlanEditor = ({ storeId, storeName, onLayoutSaved, stores = []
       evented: false,
     });
 
-    fabricCanvas.add(boundary);
+    canvas.add(boundary);
+    canvas.renderAll();
+  };
+
+  const handleStartNewLayout = () => {
+    setPendingReset(true);
+    setLayoutMetadata(null);
+    setDialogStep("dimensions");
+    setDimensionsDialogOpen(true);
+    setHistory([]);
+    setHistoryStep(-1);
+  };
+
+  const handleDeleteLayout = async () => {
+    setIsDeletingLayout(true);
+    try {
+      const { error } = await supabase
+        .from("floorplan_layouts")
+        .delete()
+        .eq("store_id", storeId);
+
+      if (error) throw error;
+
+      if (fabricCanvas) {
+        resetCanvas(fabricCanvas);
+        saveHistory(true);
+        setPendingReset(false);
+      } else {
+        setPendingReset(true);
+      }
+
+      setLayoutMetadata(null);
+      setDialogStep("dimensions");
+      setDimensionsDialogOpen(true);
+      setHistory([]);
+      setHistoryStep(-1);
+
+      toast({
+        title: "Nacrt obrisan",
+        description: "Postojeći nacrt je uklonjen.",
+      });
+
+      onLayoutSaved?.();
+    } catch (error: any) {
+      toast({
+        variant: "destructive",
+        title: "Greška",
+        description: error.message || "Brisanje nacrta nije uspelo.",
+      });
+    } finally {
+      setIsDeletingLayout(false);
+    }
+  };
+
+  const handleClearLayout = () => {
+    if (!fabricCanvas) return;
+
+    const removable = fabricCanvas
+      .getObjects()
+      .filter((object) => !isGridLine(object) && !isBoundary(object));
+
+    if (removable.length === 0) {
+      toast({
+        title: "Platno je već prazno",
+        description: "Nema elemenata za uklanjanje.",
+      });
+      return;
+    }
+
+    removable.forEach((object) => fabricCanvas.remove(object));
+    fabricCanvas.discardActiveObject();
     fabricCanvas.renderAll();
+    saveHistory();
+    setLayoutMetadata((prev) =>
+      prev ? { ...prev, elementCount: countEditableObjects(fabricCanvas) } : prev,
+    );
+    toast({
+      title: "Nacrt očišćen",
+      description: "Svi elementi su uklonjeni sa platna.",
+    });
+  };
+
+  const openLayoutDialog = () => {
+    setDialogStep(layoutMetadata ? "overview" : "dimensions");
+    setDimensionsDialogOpen(true);
   };
 
   const startWallDrawing = () => {
@@ -637,20 +832,27 @@ export const FloorPlanEditor = ({ storeId, storeName, onLayoutSaved, stores = []
   const handleSaveLayout = async () => {
     if (!fabricCanvas || !user) return;
 
+    setIsSavingLayout(true);
     try {
       const layoutData = fabricCanvas.toJSON();
       const displayWidth = storeWidthMm * SCALE_FACTOR;
       const displayHeight = storeHeightMm * SCALE_FACTOR;
+      const elementCount = countEditableObjects(fabricCanvas);
 
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from("floorplan_layouts")
-        .upsert({
-          store_id: storeId,
-          layout_data: layoutData,
-          store_width: displayWidth,
-          store_height: displayHeight,
-          created_by: user.id,
-        });
+        .upsert(
+          {
+            store_id: storeId,
+            layout_data: layoutData,
+            store_width: displayWidth,
+            store_height: displayHeight,
+            created_by: user.id,
+          },
+          { onConflict: "store_id" },
+        )
+        .select()
+        .maybeSingle();
 
       if (error) throw error;
 
@@ -659,6 +861,23 @@ export const FloorPlanEditor = ({ storeId, storeName, onLayoutSaved, stores = []
         description: "Floor plan je uspešno sačuvan",
       });
 
+      if (data) {
+        setLayoutMetadata({
+          id: data.id,
+          created_at: data.created_at,
+          updated_at: data.updated_at,
+          elementCount,
+          storeWidth: Number(data.store_width) || displayWidth,
+          storeHeight: Number(data.store_height) || displayHeight,
+        });
+      } else {
+        setLayoutMetadata((prev) =>
+          prev
+            ? { ...prev, elementCount, storeWidth: displayWidth, storeHeight: displayHeight }
+            : prev,
+        );
+      }
+
       onLayoutSaved?.();
     } catch (error: any) {
       toast({
@@ -666,6 +885,8 @@ export const FloorPlanEditor = ({ storeId, storeName, onLayoutSaved, stores = []
         title: "Greška",
         description: error.message,
       });
+    } finally {
+      setIsSavingLayout(false);
     }
   };
 
@@ -725,6 +946,9 @@ export const FloorPlanEditor = ({ storeId, storeName, onLayoutSaved, stores = []
       fabricCanvas.discardActiveObject();
       fabricCanvas.renderAll();
       saveHistory();
+      setLayoutMetadata((prev) =>
+        prev ? { ...prev, elementCount: countEditableObjects(fabricCanvas) } : prev,
+      );
     }
   };
 
@@ -752,6 +976,11 @@ export const FloorPlanEditor = ({ storeId, storeName, onLayoutSaved, stores = []
     setZoom(newZoom);
   };
 
+  const currentElementCount = layoutMetadata?.elementCount ?? (fabricCanvas ? countEditableObjects(fabricCanvas) : 0);
+  const lastUpdateLabel = formatTimestamp(layoutMetadata?.updated_at ?? layoutMetadata?.created_at);
+  const createdLabel = formatTimestamp(layoutMetadata?.created_at);
+  const areaInSquareMeters = ((storeWidthMm * storeHeightMm) / 1_000_000).toFixed(2);
+
   if (!isAdmin) {
     return (
       <div className="flex items-center justify-center h-full">
@@ -765,7 +994,7 @@ export const FloorPlanEditor = ({ storeId, storeName, onLayoutSaved, stores = []
       {/* Toolbar */}
       <div className="flex flex-wrap gap-2 p-4 bg-card border rounded-lg">
         <div className="flex gap-2 items-center border-r pr-2">
-          <Button onClick={() => setDimensionsDialogOpen(true)} variant="outline" size="sm">
+          <Button onClick={openLayoutDialog} variant="outline" size="sm">
             Dimenzije
           </Button>
           <Button onClick={undo} variant="outline" size="sm" disabled={historyStep <= 0}>
@@ -815,9 +1044,13 @@ export const FloorPlanEditor = ({ storeId, storeName, onLayoutSaved, stores = []
           </Button>
         </div>
 
-        <div className="ml-auto flex gap-2">
+        <div className="ml-auto flex gap-2 flex-wrap justify-end">
           <Button onClick={selectAll} variant="outline" size="sm">
             Označi sve
+          </Button>
+          <Button onClick={handleClearLayout} variant="outline" size="sm">
+            <Eraser className="h-4 w-4 mr-2" />
+            Očisti platno
           </Button>
           <Button onClick={deleteSelected} variant="outline" size="sm" disabled={!selectedObject}>
             <Trash2 className="h-4 w-4" />
@@ -829,9 +1062,13 @@ export const FloorPlanEditor = ({ storeId, storeName, onLayoutSaved, stores = []
             <Copy className="h-4 w-4 mr-2" />
             Kopiraj
           </Button>
-          <Button onClick={handleSaveLayout} variant="default" size="sm">
-            <Save className="h-4 w-4 mr-2" />
-            Sačuvaj
+          <Button onClick={handleSaveLayout} variant="default" size="sm" disabled={isSavingLayout}>
+            {isSavingLayout ? (
+              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+            ) : (
+              <Save className="h-4 w-4 mr-2" />
+            )}
+            {isSavingLayout ? "Čuvanje..." : "Sačuvaj"}
           </Button>
         </div>
       </div>
@@ -842,36 +1079,133 @@ export const FloorPlanEditor = ({ storeId, storeName, onLayoutSaved, stores = []
       </div>
 
       {/* Dimensions Dialog */}
-      <Dialog open={dimensionsDialogOpen} onOpenChange={setDimensionsDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Dimenzije objekta - {storeName}</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <Label>Širina objekta (mm)</Label>
-              <Input
-                type="number"
-                value={storeWidthMm}
-                onChange={(e) => setStoreWidthMm(Number(e.target.value))}
-                min={1000}
-                max={50000}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>Dužina objekta (mm)</Label>
-              <Input
-                type="number"
-                value={storeHeightMm}
-                onChange={(e) => setStoreHeightMm(Number(e.target.value))}
-                min={1000}
-                max={50000}
-              />
-            </div>
-            <Button onClick={handleSetDimensions} className="w-full">
-              Postavi dimenzije
-            </Button>
-          </div>
+      <Dialog
+        open={dimensionsDialogOpen}
+        onOpenChange={(open) => {
+          setDimensionsDialogOpen(open);
+          if (!open) {
+            setDialogStep(layoutMetadata ? "overview" : "dimensions");
+          }
+        }}
+      >
+        <DialogContent className="max-w-2xl">
+          {dialogStep === "overview" && layoutMetadata ? (
+            <>
+              <DialogHeader>
+                <DialogTitle>Pregled nacrta - {storeName}</DialogTitle>
+                <DialogDescription>
+                  Pregledajte postojeći nacrt, prilagodite dimenzije ili započnite novi nacrt.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="space-y-1 rounded-lg border p-4">
+                    <span className="text-sm text-muted-foreground">Dimenzije</span>
+                    <span className="text-lg font-semibold">
+                      {Math.round(storeWidthMm).toLocaleString()} mm × {Math.round(storeHeightMm).toLocaleString()} mm
+                    </span>
+                    <span className="text-xs text-muted-foreground">Površina ≈ {areaInSquareMeters} m²</span>
+                  </div>
+                  <div className="space-y-1 rounded-lg border p-4">
+                    <span className="text-sm text-muted-foreground">Elementi u nacrtu</span>
+                    <span className="text-lg font-semibold">{currentElementCount}</span>
+                    <Badge variant="outline" className="w-fit">{lastUpdateLabel}</Badge>
+                  </div>
+                </div>
+                <div className="rounded-lg border p-4 space-y-2">
+                  <span className="text-sm text-muted-foreground">Informacije o nacrtu</span>
+                  <p className="text-sm">Kreirano: {createdLabel}</p>
+                  {layoutMetadata.id && (
+                    <p className="text-xs text-muted-foreground break-all">ID nacrta: {layoutMetadata.id}</p>
+                  )}
+                </div>
+              </div>
+              <DialogFooter className="gap-2">
+                <Button
+                  variant="outline"
+                  onClick={() => setDialogStep("dimensions")}
+                  className="w-full sm:w-auto"
+                >
+                  Uredi dimenzije
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={handleStartNewLayout}
+                  className="w-full sm:w-auto"
+                >
+                  Novi nacrt
+                </Button>
+                <Button
+                  variant="destructive"
+                  onClick={handleDeleteLayout}
+                  disabled={isDeletingLayout}
+                  className="w-full sm:w-auto"
+                >
+                  {isDeletingLayout ? (
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  ) : (
+                    <Trash2 className="h-4 w-4 mr-2" />
+                  )}
+                  Obriši nacrt
+                </Button>
+                <Button onClick={() => setDimensionsDialogOpen(false)} className="w-full sm:w-auto">
+                  Nastavi uređivanje
+                </Button>
+              </DialogFooter>
+            </>
+          ) : (
+            <>
+              <DialogHeader>
+                <DialogTitle>Dimenzije objekta - {storeName}</DialogTitle>
+                <DialogDescription>
+                  Unesite precizne dimenzije objekta kako bi plan bio proporcionalan stvarnom prostoru.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <Label>Širina objekta (mm)</Label>
+                  <Input
+                    type="number"
+                    value={storeWidthMm}
+                    onChange={(e) => setStoreWidthMm(Number(e.target.value))}
+                    min={1000}
+                    max={50000}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Dužina objekta (mm)</Label>
+                  <Input
+                    type="number"
+                    value={storeHeightMm}
+                    onChange={(e) => setStoreHeightMm(Number(e.target.value))}
+                    min={1000}
+                    max={50000}
+                  />
+                </div>
+              </div>
+              <DialogFooter className="gap-2">
+                {layoutMetadata && (
+                  <Button
+                    variant="outline"
+                    onClick={() => setDialogStep("overview")}
+                    className="w-full sm:w-auto"
+                  >
+                    Nazad
+                  </Button>
+                )}
+                <Button
+                  variant="ghost"
+                  onClick={() => setDimensionsDialogOpen(false)}
+                  className="w-full sm:w-auto"
+                >
+                  Otkaži
+                </Button>
+                <Button onClick={handleSetDimensions} className="w-full sm:w-auto">
+                  Sačuvaj dimenzije
+                </Button>
+              </DialogFooter>
+            </>
+          )}
         </DialogContent>
       </Dialog>
 
