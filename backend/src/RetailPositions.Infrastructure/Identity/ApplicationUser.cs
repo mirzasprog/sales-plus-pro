@@ -1,11 +1,12 @@
+using RetailPositions.Domain.Entities;
+
 namespace RetailPositions.Infrastructure.Identity;
 
 /// <summary>
 /// Represents application user for authentication.
 /// </summary>
-public class ApplicationUser
+public class ApplicationUser : BaseEntity
 {
-    public Guid Id { get; set; } = Guid.NewGuid();
     public string Email { get; set; } = string.Empty;
     public string PasswordHash { get; set; } = string.Empty;
     public string Role { get; set; } = string.Empty;

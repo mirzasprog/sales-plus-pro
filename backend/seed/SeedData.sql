@@ -1,6 +1,6 @@
-INSERT INTO [dbo].[Users] ([Id], [Email], [PasswordHash], [Role], [DisplayName], [IsActive]) VALUES
-  ('11111111-1111-1111-1111-111111111111', 'admin@retail.com', '$2b$10$PzP7ZkKxqkVyuk3F7S3w2uX5Gucs5cjox96D65gis6pZeRAEIJ5X.', 'Admin', 'Platform Admin', 1),
-  ('22222222-2222-2222-2222-222222222222', 'store.manager@retail.com', '$2b$10$0XI7xL7sRKqzZo4PMBVXqeYzUKGwEuITdSb9VInA36TObgGJE0E7a', 'StoreManager', 'Store Manager', 1);
+INSERT INTO [dbo].[Users] ([Id], [Email], [PasswordHash], [Role], [DisplayName], [IsActive], [CreatedAtUtc], [CreatedBy], [IsDeleted]) VALUES
+  ('11111111-1111-1111-1111-111111111111', 'admin@retail.com', '$2b$10$PzP7ZkKxqkVyuk3F7S3w2uX5Gucs5cjox96D65gis6pZeRAEIJ5X.', 'Admin', 'Platform Admin', 1, GETUTCDATE(), 'seed', 0),
+  ('22222222-2222-2222-2222-222222222222', 'store.manager@retail.com', '$2b$10$0XI7xL7sRKqzZo4PMBVXqeYzUKGwEuITdSb9VInA36TObgGJE0E7a', 'StoreManager', 'Store Manager', 1, GETUTCDATE(), 'seed', 0);
 
 INSERT INTO [dbo].[RetailObjects] ([Id], [Code], [Name], [CreatedAtUtc], [CreatedBy], [IsDeleted], [Street], [City], [PostalCode], [Country]) VALUES
   ('33333333-3333-3333-3333-333333333333', 'ST-001', 'SuperMart Downtown', GETUTCDATE(), 'seed', 0, 'Main Street 1', 'Zagreb', '10000', 'Croatia'),
