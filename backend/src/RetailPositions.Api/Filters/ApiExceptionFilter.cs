@@ -45,5 +45,6 @@ public class ApiExceptionFilter : IExceptionFilter
         {
             StatusCode = problem.Status
         };
+        context.ExceptionHandled = true;
     }
 }
