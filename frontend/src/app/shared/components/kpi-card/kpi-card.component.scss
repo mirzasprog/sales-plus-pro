@@ -1,10 +1,13 @@
 .kpi {
-  @extend .card;
   display: flex;
   flex-direction: column;
   gap: 12px;
   border-left: 4px solid transparent;
   transition: transform 0.3s ease;
+  background-color: var(--surface-color);
+  border-radius: 16px;
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.08);
+  padding: 24px;
 }
 
 .kpi:hover {
