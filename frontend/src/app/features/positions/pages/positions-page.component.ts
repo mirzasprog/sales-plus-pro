@@ -4,12 +4,13 @@ import { Observable } from 'rxjs';
 import { map, startWith, switchMap } from 'rxjs/operators';
 import { ApiService } from '../../../core/services/api.service';
 import { NotificationService } from '../../../core/services/notification.service';
+import { PositionStatus } from '../../../shared/models/position-status';
 
 interface Position {
   id: string;
   name: string;
   positionType: string;
-  status: 'Available' | 'Reserved' | 'Occupied' | 'ExpiringSoon' | 'Inactive';
+  status: PositionStatus;
   retailObjectName: string;
 }
 
