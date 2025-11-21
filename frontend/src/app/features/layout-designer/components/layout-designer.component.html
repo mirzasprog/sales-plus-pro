@@ -1,23 +1,153 @@
 <section class="designer">
-  <aside class="palette card">
-    <h2>Elementi</h2>
-    <button type="button" (click)="addElement('Gondola')">Dodaj gondolu</button>
-    <button type="button" (click)="addElement('Promo')">Dodaj promo poziciju</button>
-    <button type="button" (click)="addElement('Stand')">Dodaj stalak</button>
-  </aside>
-
-  <div class="canvas card">
-    <svg width="100%" height="100%" preserveAspectRatio="xMidYMid meet">
-      <defs>
-        <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
-          <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#e2e8f0" stroke-width="1"></path>
-        </pattern>
-      </defs>
-      <rect width="100%" height="100%" fill="url(#grid)"></rect>
-    </svg>
-    <div class="draggable" *ngFor="let element of elements$ | async" cdkDrag [cdkDragFreeDragPosition]="{ x: element.x, y: element.y }" (cdkDragEnded)="dragEnded($event, element)" [style.width.px]="element.width" [style.height.px]="element.height">
-      <strong>{{ element.label }}</strong>
-      <span>{{ element.type }}</span>
+  <header class="toolbar card">
+    <div>
+      <p class="eyebrow">Plan trgovine</p>
+      <h1>Raspored prodajnih pozicija</h1>
+      <p class="subtitle">Dodaj, premještaj i označi pozicije na prodajnom prostoru uz pregled statusa.</p>
     </div>
+    <div class="toolbar__actions">
+      <label class="toggle">
+        <input type="checkbox" [(ngModel)]="snapToGrid" />
+        <span>Snap na mrežu</span>
+      </label>
+      <button type="button" (click)="resetToDemo()">Učitaj demo raspored</button>
+    </div>
+  </header>
+
+  <div class="designer__grid">
+    <aside class="panel card">
+      <div class="panel__header">
+        <div>
+          <p class="eyebrow">Elementi</p>
+          <h2>Paleta</h2>
+        </div>
+        <small>Prevuci elemente na platno</small>
+      </div>
+      <div class="palette">
+        <button type="button" *ngFor="let item of palette" (click)="addElement(item.type)">
+          <div class="palette__label">
+            <span class="dot" [style.background]="statusColor('Available')"></span>
+            {{ item.type }}
+          </div>
+          <small>{{ item.hint }}</small>
+        </button>
+      </div>
+      <div class="panel__footer">
+        <p>Tipovi elementi su mapirani na statuse i boje te su spremni za povezivanje s backendom.</p>
+      </div>
+    </aside>
+
+    <div class="canvas card">
+      <div class="canvas__controls">
+        <div class="zoom">
+          <button type="button" (click)="zoomOut()">-</button>
+          <span>{{ (zoom * 100) | number:'1.0-0' }}%</span>
+          <button type="button" (click)="zoomIn()">+</button>
+        </div>
+        <button type="button" class="ghost" (click)="clearSelection()">Poništi odabir</button>
+      </div>
+
+      <div class="canvas__surface" [style.backgroundSize.px]="gridSize * zoom">
+        <div class="canvas__viewport" [style.transform]="'scale(' + zoom + ')'">
+          <div
+            class="element"
+            *ngFor="let element of elements$ | async; trackBy: trackById"
+            cdkDrag
+            (cdkDragEnded)="dragEnded($event, element)"
+            [style.width.px]="element.width"
+            [style.height.px]="element.height"
+            [cdkDragFreeDragPosition]="{ x: element.x, y: element.y }"
+            [class.selected]="(selectedId$ | async) === element.id"
+            (click)="selectElement(element)"
+            [style.borderColor]="statusColor(element.status)"
+            [style.transform]="'rotate(' + element.rotation + 'deg)'"
+          >
+            <header>
+              <app-position-status-badge [status]="element.status"></app-position-status-badge>
+              <span class="type">{{ element.type }}</span>
+            </header>
+            <h3>{{ element.label }}</h3>
+            <p class="meta">{{ element.width }}×{{ element.height }} cm • X: {{ element.x }}, Y: {{ element.y }}</p>
+            <p class="note" *ngIf="element.note">{{ element.note }}</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <aside class="panel card inspector">
+      <div class="panel__header">
+        <div>
+          <p class="eyebrow">Svojstva</p>
+          <h2>Detalji pozicije</h2>
+        </div>
+      </div>
+
+      <ng-container *ngIf="selectedElement$ | async as selected; else emptyState">
+        <form class="inspector__form" [formGroup]="inspectorForm" (ngSubmit)="applyInspector(selected)">
+          <label>
+            Naziv
+            <input type="text" formControlName="label" />
+          </label>
+
+          <label>
+            Tip
+            <select formControlName="type">
+              <option *ngFor="let item of palette" [value]="item.type">{{ item.type }}</option>
+            </select>
+          </label>
+
+          <label>
+            Status
+            <select formControlName="status">
+              <option *ngFor="let status of statusOptions" [value]="status">{{ status }}</option>
+            </select>
+          </label>
+
+          <div class="grid">
+            <label>
+              Širina (cm)
+              <input type="number" formControlName="width" min="60" max="520" />
+            </label>
+            <label>
+              Visina (cm)
+              <input type="number" formControlName="height" min="60" max="520" />
+            </label>
+          </div>
+
+          <div class="grid">
+            <label>
+              X
+              <input type="number" formControlName="x" />
+            </label>
+            <label>
+              Y
+              <input type="number" formControlName="y" />
+            </label>
+          </div>
+
+          <label>
+            Rotacija (°)
+            <input type="number" formControlName="rotation" min="-45" max="45" />
+          </label>
+
+          <label>
+            Napomena
+            <textarea rows="3" formControlName="note"></textarea>
+          </label>
+
+          <div class="actions">
+            <button type="button" class="ghost" (click)="removeElement(selected)">Ukloni</button>
+            <button type="submit" [disabled]="inspectorForm.invalid">Spremi izmjene</button>
+          </div>
+        </form>
+      </ng-container>
+
+      <ng-template #emptyState>
+        <div class="empty">
+          <h3>Odaberite element</h3>
+          <p>Za uređivanje dimenzija, rotacije i statusa odaberite element na platnu.</p>
+        </div>
+      </ng-template>
+    </aside>
   </div>
 </section>
