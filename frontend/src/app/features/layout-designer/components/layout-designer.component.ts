@@ -111,18 +111,15 @@ export class LayoutDesignerComponent implements OnInit, OnDestroy {
       return;
     }
 
-    const formValue = this.inspectorForm.getRawValue();
     const updated: DesignerElement = {
       ...element,
-      label: formValue.label || element.label,
-      type: formValue.type || element.type,
-      status: formValue.status || element.status,
-      width: formValue.width ?? element.width,
-      height: formValue.height ?? element.height,
-      rotation: formValue.rotation ?? element.rotation,
-      x: formValue.x ?? element.x,
-      y: formValue.y ?? element.y,
-      note: formValue.note ?? ''
+      ...this.inspectorForm.value,
+      width: this.inspectorForm.value.width!,
+      height: this.inspectorForm.value.height!,
+      rotation: this.inspectorForm.value.rotation || 0,
+      x: this.inspectorForm.value.x || 0,
+      y: this.inspectorForm.value.y || 0,
+      note: this.inspectorForm.value.note || ''
     };
     this.layoutService.updateElement(updated);
   }
