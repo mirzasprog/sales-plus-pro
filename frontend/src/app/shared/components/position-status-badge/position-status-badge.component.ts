@@ -1,4 +1,5 @@
 import { ChangeDetectionStrategy, Component, Input } from '@angular/core';
+import { PositionStatus } from '../../models/position-status';
 
 @Component({
   selector: 'app-position-status-badge',
@@ -7,7 +8,7 @@ import { ChangeDetectionStrategy, Component, Input } from '@angular/core';
   changeDetection: ChangeDetectionStrategy.OnPush
 })
 export class PositionStatusBadgeComponent {
-  @Input({ required: true }) status!: 'Available' | 'Reserved' | 'Occupied' | 'ExpiringSoon' | 'Inactive';
+  @Input({ required: true }) status!: PositionStatus;
 
   get label(): string {
     switch (this.status) {
