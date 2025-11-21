@@ -2,11 +2,11 @@
 
 ## Overview
 
-This repository hosts a complete enterprise-grade solution for managing dodatne prodajne pozicije in supermarkets. The solution is composed of:
+This repository hosts a complete enterprise-grade solution for managing dodatne prodajne pozicije in supermarkets. The solution
+is composed of:
 
 - **backend/** – ASP.NET Core Web API with Entity Framework Core, JWT authentication and role-based authorization.
-- **frontend/** – Angular SPA with lazy-loaded feature modules, responsive dashboards and layout designer.
-- **src/** – Existing React prototype (kept for reference).
+- **frontend/** – Angular SPA with lazy-loaded feature modules, responsive dashboards and layout designer aligned with the backend API.
 
 ## Tech stack
 
@@ -36,13 +36,7 @@ npm run start
 
 App URL: `http://localhost:4200`
 
-### React prototype (optional)
-
-```bash
-npm install
-npm run dev
-```
-
 ## Deployment
 
-Deploy backend and frontend separately according to your infrastructure. Ensure environment variables for connection strings and JWT secrets are configured securely.
+Deploy backend and frontend separately according to your infrastructure. Ensure environment variables for connection strings and
+JWT secrets are configured securely.
