@@ -1,0 +1,156 @@
+[
+  {
+    "id": "layout-001",
+    "name": "Supermart Arena - prizemlje",
+    "objectId": "store-001",
+    "boundaryWidth": 1400,
+    "boundaryHeight": 820,
+    "updatedAt": "2024-05-01T10:00:00Z",
+    "elements": [
+      {
+        "id": "el-entrance",
+        "label": "Ulaz kupaca",
+        "type": "Entrance",
+        "status": "Available",
+        "width": 120,
+        "height": 80,
+        "x": 60,
+        "y": 40,
+        "rotation": 0,
+        "supplier": "",
+        "note": "Glavni ulaz"
+      },
+      {
+        "id": "el-wall-a",
+        "label": "Nosivi zid",
+        "type": "Wall",
+        "status": "Inactive",
+        "width": 1260,
+        "height": 22,
+        "x": 40,
+        "y": 20,
+        "rotation": 0,
+        "note": "Glavni zid"
+      },
+      {
+        "id": "el-wall-b",
+        "label": "Pregradni zid",
+        "type": "Wall",
+        "status": "Inactive",
+        "width": 22,
+        "height": 660,
+        "x": 40,
+        "y": 44,
+        "rotation": 0
+      },
+      {
+        "id": "el-gondola-1",
+        "label": "Gondola A1",
+        "type": "Gondola",
+        "status": "Occupied",
+        "width": 220,
+        "height": 110,
+        "x": 320,
+        "y": 120,
+        "rotation": 6,
+        "supplier": "Fresh & Co"
+      },
+      {
+        "id": "el-gondola-2",
+        "label": "Gondola A2",
+        "type": "Gondola",
+        "status": "Reserved",
+        "width": 220,
+        "height": 110,
+        "x": 580,
+        "y": 140,
+        "rotation": 4,
+        "supplier": "BeautyLine"
+      },
+      {
+        "id": "el-promo",
+        "label": "Promo zona",
+        "type": "Promo",
+        "status": "Reserved",
+        "width": 200,
+        "height": 140,
+        "x": 880,
+        "y": 200,
+        "rotation": -4,
+        "supplier": "BeautyLine"
+      },
+      {
+        "id": "el-stand",
+        "label": "Stalak akcije",
+        "type": "Stand",
+        "status": "Available",
+        "width": 140,
+        "height": 160,
+        "x": 640,
+        "y": 360,
+        "rotation": 0,
+        "note": "Akcijski stalak"
+      },
+      {
+        "id": "el-register-1",
+        "label": "Blagajna 1",
+        "type": "Cash Register",
+        "status": "ExpiringSoon",
+        "width": 240,
+        "height": 120,
+        "x": 260,
+        "y": 420,
+        "rotation": 0,
+        "supplier": "TechNova"
+      },
+      {
+        "id": "el-register-2",
+        "label": "Blagajna 2",
+        "type": "Cash Register",
+        "status": "Available",
+        "width": 240,
+        "height": 120,
+        "x": 540,
+        "y": 440,
+        "rotation": 0,
+        "supplier": "TechNova"
+      },
+      {
+        "id": "el-shelf",
+        "label": "Polica visokog reda",
+        "type": "Shelf",
+        "status": "Occupied",
+        "width": 160,
+        "height": 320,
+        "x": 980,
+        "y": 380,
+        "rotation": 0,
+        "supplier": "Fresh & Co"
+      },
+      {
+        "id": "el-display",
+        "label": "Vitrina",
+        "type": "Display Case",
+        "status": "Available",
+        "width": 200,
+        "height": 140,
+        "x": 1000,
+        "y": 120,
+        "rotation": 0,
+        "supplier": "Fresh & Co"
+      },
+      {
+        "id": "el-counter",
+        "label": "Pult degustacija",
+        "type": "Counter",
+        "status": "ExpiringSoon",
+        "width": 220,
+        "height": 120,
+        "x": 820,
+        "y": 460,
+        "rotation": 0,
+        "supplier": "Local Craft"
+      }
+    ]
+  }
+]

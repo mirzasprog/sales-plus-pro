@@ -1,0 +1,57 @@
+[
+  {
+    "id": "pos-01",
+    "name": "Gondola A1",
+    "positionType": "Gondola",
+    "status": "Occupied",
+    "retailObjectName": "Supermart Arena",
+    "supplier": "Fresh & Co",
+    "widthCm": 220,
+    "heightCm": 110,
+    "note": "Glavni prehrambeni asortiman"
+  },
+  {
+    "id": "pos-02",
+    "name": "Promo zona",
+    "positionType": "Promo",
+    "status": "Reserved",
+    "retailObjectName": "Supermart Arena",
+    "supplier": "BeautyLine",
+    "widthCm": 200,
+    "heightCm": 140,
+    "note": "Sezonske akcije"
+  },
+  {
+    "id": "pos-03",
+    "name": "Blagajna 1",
+    "positionType": "Cash Register",
+    "status": "ExpiringSoon",
+    "retailObjectName": "Split Mall",
+    "supplier": "TechNova",
+    "widthCm": 240,
+    "heightCm": 120,
+    "note": "POS terminal"
+  },
+  {
+    "id": "pos-04",
+    "name": "Polica visokog reda",
+    "positionType": "Shelf",
+    "status": "Occupied",
+    "retailObjectName": "Dalmare Center",
+    "supplier": "Fresh & Co",
+    "widthCm": 160,
+    "heightCm": 320,
+    "note": "Premium kozmetika"
+  },
+  {
+    "id": "pos-05",
+    "name": "Ulaz kupaca",
+    "positionType": "Entrance",
+    "status": "Available",
+    "retailObjectName": "Kvarner Retail Park",
+    "supplier": "",
+    "widthCm": 120,
+    "heightCm": 80,
+    "note": "Prostor ulaza"
+  }
+]

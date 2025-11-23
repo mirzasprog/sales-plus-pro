@@ -23,6 +23,17 @@ export interface DesignerElement {
   x: number;
   y: number;
   rotation: number;
-  category?: string;
+  supplier?: string;
   note?: string;
+  updatedAt?: string;
+}
+
+export interface LayoutDefinition {
+  id: string;
+  name: string;
+  objectId: string;
+  boundaryWidth: number;
+  boundaryHeight: number;
+  elements: DesignerElement[];
+  updatedAt: string;
 }

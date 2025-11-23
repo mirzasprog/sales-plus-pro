@@ -15,6 +15,9 @@
     "target": "es2022",
     "useDefineForClassFields": false,
     "lib": ["es2021", "dom"],
-    "skipLibCheck": true
+    "skipLibCheck": true,
+    "paths": {
+      "konva": ["src/app/shared/utils/konva"]
+    }
   }
 }

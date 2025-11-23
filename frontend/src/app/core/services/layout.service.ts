@@ -1,93 +1,151 @@
 import { Injectable } from '@angular/core';
-import { BehaviorSubject, combineLatest, map } from 'rxjs';
-import { v4 as uuidv4 } from 'uuid';
-import { DesignerElement } from '../../features/layout-designer/models/designer-element';
-import { PositionStatus } from '../../shared/models/position-status';
+import { BehaviorSubject, combineLatest, map, Observable, of, tap } from 'rxjs';
+import { DesignerElement, LayoutDefinition } from '../../features/layout-designer/models/designer-element';
+import { LocalStoreLayoutService } from './local-store-layout.service';
 
-@Injectable()
+@Injectable({ providedIn: 'root' })
 export class LayoutService {
   private readonly elements$ = new BehaviorSubject<DesignerElement[]>([]);
-  private readonly selectedId$ = new BehaviorSubject<string | null>(null);
+  private readonly selectedIds$ = new BehaviorSubject<string[]>([]);
+  private readonly activeLayout$ = new BehaviorSubject<LayoutDefinition | null>(null);
+
+  private readonly history: DesignerElement[][] = [];
+  private readonly future: DesignerElement[][] = [];
+
   readonly canvas$ = this.elements$.asObservable();
-  readonly selectedElement$ = combineLatest([this.canvas$, this.selectedId$]).pipe(
-    map(([elements, selectedId]) => elements.find((element) => element.id === selectedId) ?? null)
+  readonly selectedElements$ = combineLatest([this.canvas$, this.selectedIds$]).pipe(
+    map(([elements, ids]) => elements.filter((element) => ids.includes(element.id)))
   );
+  readonly selectedElement$ = this.selectedElements$.pipe(map((items) => items[0] ?? null));
+  readonly layoutMeta$ = this.activeLayout$.asObservable();
+
+  constructor(private readonly store: LocalStoreLayoutService) {}
 
   get snapshot(): DesignerElement[] {
     return this.elements$.value;
   }
 
-  setElements(elements: DesignerElement[]): void {
-    this.elements$.next(elements);
-  }
-
-  addElement(element: DesignerElement): void {
-    this.elements$.next([...this.elements$.value, element]);
-    this.selectedId$.next(element.id);
-  }
-
-  updateElement(element: DesignerElement): void {
-    this.elements$.next(this.elements$.value.map((item) => (item.id === element.id ? element : item)));
-  }
-
-  removeElement(id: string): void {
-    this.elements$.next(this.elements$.value.filter((item) => item.id !== id));
-    if (this.selectedId$.value === id) {
-      this.selectedId$.next(null);
-    }
-  }
-
-  clearLayout(): void {
-    this.setElements([]);
-    this.selectElement(null);
-  }
-
-  selectElement(id: string | null): void {
-    this.selectedId$.next(id);
+  get selectedIds(): string[] {
+    return this.selectedIds$.value;
   }
 
   loadDemoLayout(): void {
-    const demo: DesignerElement[] = [
-      this.createElement('Entrance', 'Ulaz kupaca', 'Available', 120, 60, 120, 60, 0),
-      this.createElement('Door', 'Servisni ulaz', 'Available', 100, 24, 1080, 120, 0),
-      this.createElement('Window', 'Izlog prema ulici', 'Available', 220, 20, 60, 340, 0),
-      this.createElement('Wall', 'Nosivi zid', 'Inactive', 1260, 22, 40, 24, 0),
-      this.createElement('Wall', 'Pregradni zid', 'Inactive', 22, 660, 40, 44, 0),
-      this.createElement('Gondola', 'Gondola A1', 'Occupied', 220, 110, 320, 120, 6),
-      this.createElement('Gondola', 'Gondola A2', 'Reserved', 220, 110, 580, 140, 4),
-      this.createElement('Promo', 'Promo zona', 'Reserved', 200, 140, 880, 200, -4),
-      this.createElement('Stand', 'Stalak akcije', 'Available', 140, 160, 640, 360, 0),
-      this.createElement('Cash Register', 'Blagajna 1', 'ExpiringSoon', 240, 120, 260, 420, 0),
-      this.createElement('Cash Register', 'Blagajna 2', 'Available', 240, 120, 540, 440, 0),
-      this.createElement('Shelf', 'Polica visokog reda', 'Occupied', 160, 320, 980, 380, 0),
-      this.createElement('Display Case', 'Vitrina za delikates', 'Available', 200, 140, 1000, 120, 0),
-      this.createElement('Counter', 'Pult za degustaciju', 'ExpiringSoon', 220, 120, 820, 460, 0)
-    ];
-    this.setElements(demo);
-    this.selectElement(null);
+    this.store
+      .loadLayouts()
+      .pipe(
+        map((layouts) => layouts[0]),
+        tap((layout) => this.applyLayout(layout))
+      )
+      .subscribe();
   }
 
-  private createElement(
-    type: DesignerElement['type'],
-    label: string,
-    status: PositionStatus,
-    width: number,
-    height: number,
-    x: number,
-    y: number,
-    rotation = 0
-  ): DesignerElement {
-    return {
-      id: uuidv4(),
-      type,
-      label,
-      status,
-      width,
-      height,
-      x,
-      y,
-      rotation,
-      note: type === 'Promo' ? 'Istaknuta akcijska zona s velikom vidljivošću' : undefined
+  loadLayout(id: string): Observable<LayoutDefinition | undefined> {
+    return this.store.getLayoutById(id).pipe(tap((layout) => this.applyLayout(layout)));
+  }
+
+  saveLayout(name: string | null = null): Observable<LayoutDefinition | null> {
+    const current = this.activeLayout$.value;
+    if (!current) {
+      return of(null);
+    }
+
+    const next: LayoutDefinition = {
+      ...current,
+      name: name ?? current.name,
+      elements: this.elements$.value,
+      updatedAt: new Date().toISOString()
     };
+
+    return this.store.saveLayout(next).pipe(tap((layout) => this.activeLayout$.next(layout)));
+  }
+
+  addElement(element: DesignerElement): void {
+    const next = [...this.elements$.value, element];
+    this.commit(next);
+    this.selectedIds$.next([element.id]);
+  }
+
+  updateElement(element: DesignerElement): void {
+    const next = this.elements$.value.map((item) => (item.id === element.id ? element : item));
+    this.commit(next);
+    this.selectedIds$.next([element.id]);
+  }
+
+  removeElement(id: string): void {
+    const next = this.elements$.value.filter((item) => item.id !== id);
+    this.commit(next);
+    this.selectedIds$.next([]);
+  }
+
+  clearLayout(): void {
+    this.commit([]);
+    this.selectedIds$.next([]);
+  }
+
+  selectElements(ids: string[]): void {
+    this.selectedIds$.next(ids);
+  }
+
+  selectElement(id: string | null): void {
+    this.selectElements(id ? [id] : []);
+  }
+
+  undo(): void {
+    if (!this.history.length) {
+      return;
+    }
+    const current = this.history.pop();
+    if (!current) {
+      return;
+    }
+    this.future.push(this.elements$.value);
+    this.elements$.next(current);
+  }
+
+  redo(): void {
+    const next = this.future.pop();
+    if (!next) {
+      return;
+    }
+    this.history.push(this.clone(this.elements$.value));
+    this.elements$.next(next);
+  }
+
+  importElements(elements: DesignerElement[]): void {
+    this.commit(elements);
+  }
+
+  setBoundary(width: number, height: number): void {
+    const layout = this.activeLayout$.value;
+    if (!layout) {
+      return;
+    }
+    this.activeLayout$.next({ ...layout, boundaryWidth: width, boundaryHeight: height });
+  }
+
+  private applyLayout(layout?: LayoutDefinition): void {
+    if (!layout) {
+      this.activeLayout$.next(null);
+      this.elements$.next([]);
+      this.history.length = 0;
+      this.future.length = 0;
+      return;
+    }
+    this.activeLayout$.next(layout);
+    this.elements$.next(layout.elements);
+    this.selectedIds$.next([]);
+    this.history.length = 0;
+    this.future.length = 0;
+    this.history.push(this.clone(layout.elements));
+  }
+
+  private commit(elements: DesignerElement[]): void {
+    this.history.push(this.clone(this.elements$.value));
+    this.future.length = 0;
+    this.elements$.next(elements);
+  }
+
+  private clone(elements: DesignerElement[]): DesignerElement[] {
+    return elements.map((el) => ({ ...el }));
   }
 }

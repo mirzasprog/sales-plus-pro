@@ -2,23 +2,8 @@ import { ChangeDetectionStrategy, Component, OnInit } from '@angular/core';
 import { FormBuilder } from '@angular/forms';
 import { Observable } from 'rxjs';
 import { map, startWith, switchMap } from 'rxjs/operators';
-import { ApiService } from '../../../core/services/api.service';
-
-interface StoreMetrics {
-  id: string;
-  code: string;
-  name: string;
-  street: string;
-  city: string;
-  totalPositions: number;
-  occupied: number;
-  available: number;
-  reserved: number;
-  inactive: number;
-  expiringContracts: number;
-  activeRevenue: number;
-  layoutCount: number;
-}
+import { StoreService } from '../../../core/services/store.service';
+import { Store } from '../../../shared/models/store.model';
 
 @Component({
   selector: 'app-store-list-page',
@@ -33,17 +18,17 @@ export class StoreListPageComponent implements OnInit {
     expiringInDays: [30]
   });
 
-  stores$!: Observable<StoreMetrics[]>;
+  stores$!: Observable<Store[]>;
   summary$!: Observable<{ occupancy: number; free: number; revenue: number; expiring: number }>;
 
-  constructor(private readonly fb: FormBuilder, private readonly api: ApiService) {}
+  constructor(private readonly fb: FormBuilder, private readonly storeService: StoreService) {}
 
   ngOnInit(): void {
     const filters$ = this.filterForm.valueChanges.pipe(startWith(this.filterForm.value));
 
     this.stores$ = filters$.pipe(
       switchMap((filters) =>
-        this.api.get<StoreMetrics[]>('dashboard/stores', { expiringInDays: filters.expiringInDays ?? 30 }).pipe(
+        this.storeService.getAll().pipe(
           map((stores) =>
             stores.filter((store) =>
               [store.name, store.code, store.city]

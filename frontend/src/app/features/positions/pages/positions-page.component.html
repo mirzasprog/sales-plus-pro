@@ -1,6 +1,12 @@
 <section class="positions">
   <form [formGroup]="filterForm" class="filter">
     <input type="search" placeholder="Pretraži pozicije..." formControlName="search" />
+    <select formControlName="status">
+      <option value="">Status</option>
+      <option *ngFor="let status of statusOptions" [value]="status">{{ status }}</option>
+    </select>
+    <input type="text" placeholder="Dobavljač" formControlName="supplier" />
+    <input type="text" placeholder="Tip elementa" formControlName="type" />
   </form>
 
   <div class="position-list" *ngIf="positions$ | async as positions">
@@ -10,6 +16,8 @@
         <app-position-status-badge [status]="position.status"></app-position-status-badge>
       </header>
       <p class="meta">{{ position.retailObjectName }} • {{ position.positionType }}</p>
+      <p class="muted" *ngIf="position.supplier">Dobavljač: {{ position.supplier }}</p>
+      <p class="muted">Dimenzije: {{ position.widthCm }}×{{ position.heightCm }} cm</p>
       <footer>
         <button type="button" (click)="markInactive(position)">Označi kao neaktivno</button>
       </footer>
