@@ -2,18 +2,8 @@ import { ChangeDetectionStrategy, Component, OnInit } from '@angular/core';
 import { FormBuilder } from '@angular/forms';
 import { Observable } from 'rxjs';
 import { map, startWith, switchMap } from 'rxjs/operators';
-import { ApiService } from '../../../core/services/api.service';
-
-interface SupplierMetrics {
-  id: string;
-  name: string;
-  category: string;
-  activeContracts: number;
-  activeStores: number;
-  activePositions: number;
-  activeRevenue: number;
-  nextExpiry?: string;
-}
+import { SupplierService } from '../../../core/services/supplier.service';
+import { Supplier } from '../../../shared/models/supplier.model';
 
 @Component({
   selector: 'app-supplier-list-page',
@@ -27,21 +17,23 @@ export class SupplierListPageComponent implements OnInit {
     category: ['']
   });
 
-  suppliers$!: Observable<SupplierMetrics[]>;
+  suppliers$!: Observable<Supplier[]>;
 
-  constructor(private readonly fb: FormBuilder, private readonly api: ApiService) {}
+  constructor(private readonly fb: FormBuilder, private readonly supplierService: SupplierService) {}
 
   ngOnInit(): void {
     const filters$ = this.filterForm.valueChanges.pipe(startWith(this.filterForm.value));
     this.suppliers$ = filters$.pipe(
-      switchMap((filters) => this.api.get<SupplierMetrics[]>('dashboard/suppliers').pipe(
-        map((suppliers) =>
-          suppliers.filter((supplier) =>
-            supplier.name.toLowerCase().includes((filters.search ?? '').toLowerCase()) &&
-            (filters.category ? supplier.category.toLowerCase().includes(filters.category.toLowerCase()) : true)
+      switchMap((filters) =>
+        this.supplierService.getAll().pipe(
+          map((suppliers) =>
+            suppliers.filter((supplier) =>
+              supplier.name.toLowerCase().includes((filters.search ?? '').toLowerCase()) &&
+              (filters.category ? supplier.category.toLowerCase().includes(filters.category.toLowerCase()) : true)
+            )
           )
         )
-      ))
+      )
     );
   }
 }

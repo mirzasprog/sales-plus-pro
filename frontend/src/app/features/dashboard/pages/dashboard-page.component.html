@@ -3,13 +3,78 @@
     <app-kpi-card label="Ukupno pozicija" [value]="summary.totalPositions"></app-kpi-card>
     <app-kpi-card label="Slobodno" [value]="summary.available" accent="success"></app-kpi-card>
     <app-kpi-card label="Zauzeto" [value]="summary.occupied" accent="danger"></app-kpi-card>
+    <app-kpi-card label="Rezervirano" [value]="summary.reserved" accent="warning"></app-kpi-card>
     <app-kpi-card label="Ističe uskoro" [value]="summary.expiringSoon" accent="warning"></app-kpi-card>
     <app-kpi-card label="Neaktivno" [value]="summary.inactive"></app-kpi-card>
-    <app-kpi-card label="Prihod YTD" [value]="summary.revenueYtd | currency:'EUR'" accent="success"></app-kpi-card>
+    <app-kpi-card label="Ugovori koji ističu" [value]="summary.expiringContracts"></app-kpi-card>
+    <app-kpi-card label="Pokrivenost objekata" [value]="summary.coverage + '%'" accent="success"></app-kpi-card>
   </div>
 
-  <div class="chart-card card" *ngIf="chartData$ | async as chartData">
-    <h2>Status pozicija</h2>
-    <ngx-charts-pie-chart [results]="chartData" [legend]="true" [animations]="true" [labels]="true"></ngx-charts-pie-chart>
+  <div class="dashboard__grid">
+    <div class="card">
+      <h2>Status pozicija</h2>
+      <ngx-charts-pie-chart
+        *ngIf="summary$ | async as s"
+        [results]="[
+          { name: 'Slobodno', value: s.available },
+          { name: 'Zauzeto', value: s.occupied },
+          { name: 'Rezervirano', value: s.reserved },
+          { name: 'Ističe', value: s.expiringSoon },
+          { name: 'Neaktivno', value: s.inactive }
+        ]"
+        [legend]="true"
+        [animations]="true"
+        [labels]="true"
+      ></ngx-charts-pie-chart>
+    </div>
+
+    <div class="card" *ngIf="expiringContracts$ | async as expiring">
+      <header class="card__header">
+        <h2>Ugovori koji ističu (45 dana)</h2>
+      </header>
+      <div class="list">
+        <div class="list__row" *ngFor="let contract of expiring">
+          <div>
+            <div class="title">{{ contract.supplier }}</div>
+            <div class="muted">Rok: {{ contract.endDate | date }}</div>
+          </div>
+          <div>{{ contract.value | currency: 'EUR' }}</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card" *ngIf="topSuppliers$ | async as suppliers">
+      <header class="card__header">
+        <h2>Top dobavljači</h2>
+        <p class="muted">Po aktivnom zakupu</p>
+      </header>
+      <div class="list">
+        <div class="list__row" *ngFor="let supplier of suppliers">
+          <div>
+            <div class="title">{{ supplier.name }}</div>
+            <div class="muted">{{ supplier.category }}</div>
+          </div>
+          <div>{{ supplier.activeRevenue | currency: 'EUR' }}</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card" *ngIf="storeCoverage$ | async as stores">
+      <header class="card__header">
+        <h2>Pokrivenost objekata</h2>
+        <p class="muted">Prvih nekoliko objekata</p>
+      </header>
+      <div class="list">
+        <div class="list__row" *ngFor="let store of stores">
+          <div>
+            <div class="title">{{ store.name }}</div>
+            <div class="muted">{{ store.city }}</div>
+          </div>
+          <div class="pill">
+            <span class="dot occupied"></span>{{ (store.occupied / store.totalPositions) * 100 | number: '1.0-0' }}%
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 </section>

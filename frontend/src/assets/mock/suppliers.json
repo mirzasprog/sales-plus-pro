@@ -1,0 +1,42 @@
+[
+  {
+    "id": "sup-01",
+    "name": "Fresh & Co",
+    "category": "Hrana",
+    "activeContracts": 8,
+    "activeStores": 4,
+    "activePositions": 14,
+    "activeRevenue": 72000,
+    "nextExpiry": "2024-07-30"
+  },
+  {
+    "id": "sup-02",
+    "name": "TechNova",
+    "category": "Elektronika",
+    "activeContracts": 6,
+    "activeStores": 3,
+    "activePositions": 10,
+    "activeRevenue": 54000,
+    "nextExpiry": "2024-08-12"
+  },
+  {
+    "id": "sup-03",
+    "name": "BeautyLine",
+    "category": "Kozmetika",
+    "activeContracts": 5,
+    "activeStores": 3,
+    "activePositions": 9,
+    "activeRevenue": 46000,
+    "nextExpiry": "2024-06-20"
+  },
+  {
+    "id": "sup-04",
+    "name": "Local Craft",
+    "category": "Handmade",
+    "activeContracts": 3,
+    "activeStores": 2,
+    "activePositions": 4,
+    "activeRevenue": 18000,
+    "nextExpiry": "2024-09-05"
+  }
+]

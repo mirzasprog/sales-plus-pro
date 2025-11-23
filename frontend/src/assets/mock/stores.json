@@ -1,0 +1,62 @@
+[
+  {
+    "id": "store-001",
+    "code": "ZG-01",
+    "name": "Supermart Arena",
+    "street": "Avenija Dubrovnik 16",
+    "city": "Zagreb",
+    "totalPositions": 42,
+    "occupied": 30,
+    "available": 8,
+    "reserved": 2,
+    "inactive": 2,
+    "expiringContracts": 3,
+    "activeRevenue": 185000,
+    "layoutCount": 3
+  },
+  {
+    "id": "store-002",
+    "code": "ST-02",
+    "name": "Dalmare Center",
+    "street": "Put Murvice 4",
+    "city": "Zadar",
+    "totalPositions": 28,
+    "occupied": 18,
+    "available": 6,
+    "reserved": 3,
+    "inactive": 1,
+    "expiringContracts": 2,
+    "activeRevenue": 126400,
+    "layoutCount": 2
+  },
+  {
+    "id": "store-003",
+    "code": "ST-03",
+    "name": "Split Mall",
+    "street": "Ulica Hrvatske Mornarice 10",
+    "city": "Split",
+    "totalPositions": 32,
+    "occupied": 24,
+    "available": 5,
+    "reserved": 2,
+    "inactive": 1,
+    "expiringContracts": 4,
+    "activeRevenue": 153800,
+    "layoutCount": 4
+  },
+  {
+    "id": "store-004",
+    "code": "RI-04",
+    "name": "Kvarner Retail Park",
+    "street": "Riječka 21",
+    "city": "Rijeka",
+    "totalPositions": 22,
+    "occupied": 11,
+    "available": 7,
+    "reserved": 2,
+    "inactive": 2,
+    "expiringContracts": 1,
+    "activeRevenue": 82000,
+    "layoutCount": 1
+  }
+]
