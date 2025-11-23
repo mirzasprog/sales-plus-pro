@@ -1,6 +1,17 @@
 import { PositionStatus } from '../../../shared/models/position-status';
 
-export type DesignerElementType = 'Gondola' | 'Promo' | 'Stand' | 'Cash Register' | 'Entrance';
+export type DesignerElementType =
+  | 'Gondola'
+  | 'Promo'
+  | 'Stand'
+  | 'Cash Register'
+  | 'Entrance'
+  | 'Display Case'
+  | 'Shelf'
+  | 'Door'
+  | 'Window'
+  | 'Wall'
+  | 'Counter';
 
 export interface DesignerElement {
   id: string;
