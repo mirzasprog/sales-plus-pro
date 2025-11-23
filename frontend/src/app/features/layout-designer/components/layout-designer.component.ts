@@ -61,9 +61,9 @@ export class LayoutDesignerComponent implements OnInit, OnDestroy, AfterViewInit
     label: ['', [Validators.required, Validators.minLength(3)]],
     type: ['Gondola' as DesignerElementType, Validators.required],
     status: ['Available' as PositionStatus, Validators.required],
-    width: [160, [Validators.required, Validators.min(60), Validators.max(520)]],
-    height: [120, [Validators.required, Validators.min(60), Validators.max(520)]],
-    rotation: [0, [Validators.min(-45), Validators.max(45)]],
+    width: [160, [Validators.required, Validators.min(30), Validators.max(1200)]],
+    height: [120, [Validators.required, Validators.min(10), Validators.max(1200)]],
+    rotation: [0, [Validators.min(-180), Validators.max(180)]],
     x: [0],
     y: [0],
     note: ['']
@@ -93,6 +93,25 @@ export class LayoutDesignerComponent implements OnInit, OnDestroy, AfterViewInit
         });
       }
     });
+
+    this.inspectorForm
+      .get('type')
+      ?.valueChanges.pipe(takeUntil(this.destroy$))
+      .subscribe((type) => {
+        const statusControl = this.inspectorForm.get('status');
+        if (!statusControl) {
+          return;
+        }
+        if (!this.showStatus(type as DesignerElementType)) {
+          statusControl.disable({ emitEvent: false });
+        } else {
+          statusControl.enable({ emitEvent: false });
+        }
+      });
+  }
+
+  ngAfterViewInit(): void {
+    setTimeout(() => this.fitToContent(), 0);
   }
 
   ngAfterViewInit(): void {
@@ -131,6 +150,10 @@ export class LayoutDesignerComponent implements OnInit, OnDestroy, AfterViewInit
 
   selectElement(element: DesignerElement): void {
     this.layoutService.selectElement(element.id);
+  }
+
+  showStatus(type: DesignerElementType): boolean {
+    return !['Door', 'Window', 'Cash Register', 'Wall'].includes(type);
   }
 
   clearSelection(): void {
