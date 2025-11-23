@@ -13,6 +13,10 @@ export class LayoutService {
     map(([elements, selectedId]) => elements.find((element) => element.id === selectedId) ?? null)
   );
 
+  get snapshot(): DesignerElement[] {
+    return this.elements$.value;
+  }
+
   setElements(elements: DesignerElement[]): void {
     this.elements$.next(elements);
   }
@@ -33,18 +37,31 @@ export class LayoutService {
     }
   }
 
+  clearLayout(): void {
+    this.setElements([]);
+    this.selectElement(null);
+  }
+
   selectElement(id: string | null): void {
     this.selectedId$.next(id);
   }
 
   loadDemoLayout(): void {
     const demo: DesignerElement[] = [
-      this.createElement('Entrance', 'Ulaz kupaca', 'Available', 120, 60, 32, 32, 0),
-      this.createElement('Gondola', 'Gondola A1', 'Occupied', 220, 110, 240, 64, 6),
-      this.createElement('Promo', 'Promo zona', 'Reserved', 180, 120, 520, 84, -4),
-      this.createElement('Stand', 'Stalak akcije', 'Available', 140, 160, 160, 240, 0),
-      this.createElement('Cash Register', 'Blagajna 1', 'ExpiringSoon', 240, 120, 460, 280, 0),
-      this.createElement('Gondola', 'Gondola B2', 'Inactive', 220, 110, 720, 180, 2)
+      this.createElement('Entrance', 'Ulaz kupaca', 'Available', 120, 60, 120, 60, 0),
+      this.createElement('Door', 'Servisni ulaz', 'Available', 100, 24, 1080, 120, 0),
+      this.createElement('Window', 'Izlog prema ulici', 'Available', 220, 20, 60, 340, 0),
+      this.createElement('Wall', 'Nosivi zid', 'Inactive', 1260, 22, 40, 24, 0),
+      this.createElement('Wall', 'Pregradni zid', 'Inactive', 22, 660, 40, 44, 0),
+      this.createElement('Gondola', 'Gondola A1', 'Occupied', 220, 110, 320, 120, 6),
+      this.createElement('Gondola', 'Gondola A2', 'Reserved', 220, 110, 580, 140, 4),
+      this.createElement('Promo', 'Promo zona', 'Reserved', 200, 140, 880, 200, -4),
+      this.createElement('Stand', 'Stalak akcije', 'Available', 140, 160, 640, 360, 0),
+      this.createElement('Cash Register', 'Blagajna 1', 'ExpiringSoon', 240, 120, 260, 420, 0),
+      this.createElement('Cash Register', 'Blagajna 2', 'Available', 240, 120, 540, 440, 0),
+      this.createElement('Shelf', 'Polica visokog reda', 'Occupied', 160, 320, 980, 380, 0),
+      this.createElement('Display Case', 'Vitrina za delikates', 'Available', 200, 140, 1000, 120, 0),
+      this.createElement('Counter', 'Pult za degustaciju', 'ExpiringSoon', 220, 120, 820, 460, 0)
     ];
     this.setElements(demo);
     this.selectElement(null);

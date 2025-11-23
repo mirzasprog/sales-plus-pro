@@ -1,19 +1,20 @@
 import { Injectable } from '@angular/core';
-import { CanActivate, Router } from '@angular/router';
+import { CanActivate } from '@angular/router';
 import { map } from 'rxjs';
 import { AuthService } from '../services/auth.service';
 
 @Injectable()
 export class AuthGuard implements CanActivate {
-  constructor(private readonly auth: AuthService, private readonly router: Router) {}
+  constructor(private readonly auth: AuthService) {}
 
   canActivate() {
     return this.auth.authState$.pipe(
       map((state) => {
         if (!state.token) {
-          this.router.navigate(['/auth/login']);
-          return false;
+          // Demo mod: ako nema spremljenog tokena, automatski kreiraj demo sesiju i pusti pristup
+          this.auth.logout();
         }
+
         return true;
       })
     );

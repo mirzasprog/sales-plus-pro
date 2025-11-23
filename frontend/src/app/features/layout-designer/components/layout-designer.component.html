@@ -10,6 +10,8 @@
         <input type="checkbox" [(ngModel)]="snapToGrid" />
         <span>Snap na mrežu</span>
       </label>
+      <button type="button" class="ghost" (click)="clearLayout()">Obriši nacrt</button>
+      <button type="button" class="ghost" (click)="fitToContent()">Prikaži cijeli nacrt</button>
       <button type="button" (click)="resetToDemo()">Učitaj demo raspored</button>
     </div>
   </header>
@@ -24,10 +26,15 @@
         <small>Prevuci elemente na platno</small>
       </div>
       <div class="palette">
-        <button type="button" *ngFor="let item of palette" (click)="addElement(item.type)">
+        <button type="button" *ngFor="let item of palette" (click)="handlePaletteClick(item.type)">
           <div class="palette__label">
-            <span class="dot" [style.background]="statusColor('Available')"></span>
-            {{ item.type }}
+            <span class="symbol" [style.color]="typeStyle(item.type).color" [style.background]="typeStyle(item.type).fill">
+              {{ typeStyle(item.type).icon }}
+            </span>
+            <div>
+              <strong>{{ typeStyle(item.type).label }}</strong>
+              <p class="palette__type">{{ item.type }}</p>
+            </div>
           </div>
           <small>{{ item.hint }}</small>
         </button>
@@ -44,11 +51,23 @@
           <span>{{ (zoom * 100) | number:'1.0-0' }}%</span>
           <button type="button" (click)="zoomIn()">+</button>
         </div>
-        <button type="button" class="ghost" (click)="clearSelection()">Poništi odabir</button>
+        <div class="canvas__control-buttons">
+          <button type="button" class="ghost" (click)="clearSelection()">Poništi odabir</button>
+          <button type="button" class="ghost" (click)="fitToContent()">Zoom to fit</button>
+        </div>
       </div>
 
-      <div class="canvas__surface" [style.backgroundSize.px]="gridSize * zoom">
-        <div class="canvas__viewport" [style.transform]="'scale(' + zoom + ')'">
+      <div
+        #surface
+        class="canvas__surface"
+        (mousedown)="onSurfaceMouseDown($event)"
+        (mousemove)="pan($event)"
+        (mouseup)="endPan()"
+        (mouseleave)="endPan()"
+        (wheel)="onWheel($event)"
+        [style.backgroundSize.px]="gridSize * zoom"
+      >
+        <div class="canvas__viewport" [style.transform]="'translate(' + panX + 'px, ' + panY + 'px) scale(' + zoom + ')'">
           <div
             class="element"
             *ngFor="let element of elements$ | async; trackBy: trackById"
@@ -58,19 +77,77 @@
             [style.height.px]="element.height"
             [cdkDragFreeDragPosition]="{ x: element.x, y: element.y }"
             [class.selected]="(selectedId$ | async) === element.id"
+            [cdkDragDisabled]="!!resizing || !!rotating"
             (click)="selectElement(element)"
             [style.borderColor]="statusColor(element.status)"
             [style.transform]="'rotate(' + element.rotation + 'deg)'"
+            [style.background]="typeStyle(element.type).fill"
+            [attr.data-type]="element.type"
           >
             <header>
-              <app-position-status-badge [status]="element.status"></app-position-status-badge>
-              <span class="type">{{ element.type }}</span>
+              <div class="element__title">
+                <span class="symbol" [style.color]="typeStyle(element.type).color" [style.background]="'#fff'">
+                  {{ typeStyle(element.type).icon }}
+                </span>
+                <div>
+                  <h3>{{ element.label }}</h3>
+                  <p class="meta">{{ typeStyle(element.type).label }} • {{ element.type }}</p>
+                </div>
+              </div>
+              <app-position-status-badge *ngIf="showStatus(element.type)" [status]="element.status"></app-position-status-badge>
             </header>
-            <h3>{{ element.label }}</h3>
-            <p class="meta">{{ element.width }}×{{ element.height }} cm • X: {{ element.x }}, Y: {{ element.y }}</p>
+            <p class="meta dimensions">{{ element.width }}×{{ element.height }} cm • X: {{ element.x }}, Y: {{ element.y }}</p>
             <p class="note" *ngIf="element.note">{{ element.note }}</p>
+
+            <div class="handles" *ngIf="(selectedId$ | async) === element.id">
+              <span class="handle nw" (mousedown)="startResize($event, element, 'nw')"></span>
+              <span class="handle ne" (mousedown)="startResize($event, element, 'ne')"></span>
+              <span class="handle sw" (mousedown)="startResize($event, element, 'sw')"></span>
+              <span class="handle se" (mousedown)="startResize($event, element, 'se')"></span>
+              <button class="rotate" type="button" (mousedown)="startRotate($event, element)">↻</button>
+            </div>
           </div>
         </div>
+      </div>
+      <div class="detail-popover card" *ngIf="selectedElement$ | async as detail">
+        <div class="popover__header">
+          <div class="element__title">
+            <span class="symbol" [style.color]="typeStyle(detail.type).color" [style.background]="'#0b1220'">
+              {{ typeStyle(detail.type).icon }}
+            </span>
+            <div>
+              <p class="eyebrow">Detalji elementa</p>
+              <h3>{{ detail.label }}</h3>
+              <p class="meta">{{ typeStyle(detail.type).label }} • {{ detail.type }}</p>
+            </div>
+          </div>
+          <button class="ghost" type="button" (click)="clearSelection()">Zatvori</button>
+        </div>
+        <dl>
+          <div>
+            <dt>Položaj</dt>
+            <dd>X: {{ detail.x }} cm • Y: {{ detail.y }} cm</dd>
+          </div>
+          <div>
+            <dt>Dimenzije</dt>
+            <dd>{{ detail.width }} × {{ detail.height }} cm</dd>
+          </div>
+          <div>
+            <dt>Rotacija</dt>
+            <dd>{{ detail.rotation }}°</dd>
+          </div>
+          <div *ngIf="showStatus(detail.type)">
+            <dt>Status</dt>
+            <dd>{{ detail.status }}</dd>
+          </div>
+          <div *ngIf="detail.note">
+            <dt>Napomena</dt>
+            <dd>{{ detail.note }}</dd>
+          </div>
+        </dl>
+      </div>
+      <div class="hint" *ngIf="drawMode === 'Wall'">
+        Nacrtajte zid klikom i povlačenjem po platnu. Ponovni klik završava crtanje.
       </div>
     </div>
 
@@ -96,7 +173,7 @@
             </select>
           </label>
 
-          <label>
+          <label *ngIf="showStatus(inspectorForm.get('type')?.value as any)">
             Status
             <select formControlName="status">
               <option *ngFor="let status of statusOptions" [value]="status">{{ status }}</option>
@@ -106,11 +183,11 @@
           <div class="grid">
             <label>
               Širina (cm)
-              <input type="number" formControlName="width" min="60" max="520" />
+              <input type="number" formControlName="width" min="30" max="1200" />
             </label>
             <label>
               Visina (cm)
-              <input type="number" formControlName="height" min="60" max="520" />
+              <input type="number" formControlName="height" min="10" max="1200" />
             </label>
           </div>
 
@@ -127,7 +204,7 @@
 
           <label>
             Rotacija (°)
-            <input type="number" formControlName="rotation" min="-45" max="45" />
+            <input type="number" formControlName="rotation" min="-180" max="180" />
           </label>
 
           <label>
