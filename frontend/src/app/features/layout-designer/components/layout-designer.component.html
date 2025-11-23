@@ -27,7 +27,13 @@
         <small>Dodaj elemente na canvas</small>
       </div>
       <div class="palette">
-        <button type="button" *ngFor="let item of palette" (click)="handlePaletteClick(item.type)">
+        <button
+          type="button"
+          *ngFor="let item of palette"
+          (click)="handlePaletteClick(item.type)"
+          draggable="true"
+          (dragstart)="handlePaletteDragStart($event, item.type)"
+        >
           <div class="palette__label">
             <span class="symbol" [style.color]="typeStyle(item.type).color" [style.background]="typeStyle(item.type).fill">
               {{ typeStyle(item.type).icon }}
@@ -59,8 +65,15 @@
         </div>
       </div>
 
-      <div class="canvas__surface" #stageHost>
+      <div class="canvas__surface" #stageHost (dragover)="handleCanvasDragOver($event)" (drop)="handleCanvasDrop($event)">
         <div class="grid-overlay"></div>
+      </div>
+
+      <div *ngIf="contextMenu.visible" class="context-menu" [style.top.px]="contextMenu.y" [style.left.px]="contextMenu.x">
+        <button type="button" (click)="duplicateFromContext()">Dupliciraj</button>
+        <button type="button" (click)="deleteFromContext()">Obriši</button>
+        <button type="button" (click)="bringToFront()">Na vrh</button>
+        <button type="button" (click)="sendToBack()">Na dno</button>
       </div>
 
       <div class="surface-legend" *ngIf="layoutMeta$ | async as layout">
@@ -124,7 +137,7 @@
               Rotacija (°)
               <input type="number" formControlName="rotation" min="-180" max="180" />
             </label>
-            <label>
+            <label *ngIf="!isConstruction($any(inspectorForm.get('type')?.value))">
               Dobavljač
               <input type="text" formControlName="supplier" placeholder="Dobavljač/partner" />
             </label>
@@ -147,5 +160,99 @@
         </div>
       </ng-template>
     </aside>
+  </div>
+
+  <div class="modal-backdrop" *ngIf="editModal.open">
+    <div class="modal card">
+      <header>
+        <div>
+          <p class="eyebrow">Brzi edit</p>
+          <h3>Uredi element</h3>
+        </div>
+        <button type="button" class="ghost" (click)="closeModal()">Zatvori</button>
+      </header>
+      <form [formGroup]="modalForm" class="modal__form">
+        <div class="grid">
+          <label>
+            Naziv
+            <input type="text" formControlName="label" />
+          </label>
+          <label>
+            Tip
+            <select formControlName="type">
+              <option *ngFor="let item of palette" [value]="item.type">{{ item.type }}</option>
+            </select>
+          </label>
+        </div>
+
+        <label *ngIf="!isConstruction($any(modalForm.get('type')?.value))">
+          Status
+          <select formControlName="status">
+            <option *ngFor="let status of statusOptions" [value]="status">{{ status }}</option>
+          </select>
+        </label>
+
+        <div class="grid">
+          <label>
+            Širina (cm)
+            <input type="number" formControlName="width" min="10" max="2000" />
+          </label>
+          <label>
+            Visina (cm)
+            <input type="number" formControlName="height" min="10" max="2000" />
+          </label>
+        </div>
+
+        <div class="grid">
+          <label>
+            X
+            <input type="number" formControlName="x" />
+          </label>
+          <label>
+            Y
+            <input type="number" formControlName="y" />
+          </label>
+        </div>
+
+        <div class="grid">
+          <label>
+            Rotacija (°)
+            <input type="number" formControlName="rotation" min="-180" max="180" />
+          </label>
+          <label *ngIf="!isConstruction($any(modalForm.get('type')?.value))">
+            Dobavljač
+            <input type="text" formControlName="supplier" placeholder="Dobavljač/partner" />
+          </label>
+        </div>
+
+        <label>
+          Napomena
+          <textarea rows="2" formControlName="note"></textarea>
+        </label>
+
+        <div class="grid" *ngIf="!isConstruction($any(modalForm.get('type')?.value))">
+          <label>
+            Cijena zakupa (EUR)
+            <input type="number" formControlName="price" />
+          </label>
+          <label>
+            Datum ugovora (od)
+            <input type="date" formControlName="contractStart" />
+          </label>
+          <label>
+            Datum ugovora (do)
+            <input type="date" formControlName="contractEnd" />
+          </label>
+        </div>
+
+        <div class="modal__actions">
+          <small>Ovdje se uređuju ključna polja bez korištenja desnog panela.</small>
+          <div>
+            <button type="button" class="ghost" (click)="closeModal()">Odustani</button>
+            <button type="button" (click)="saveModal()" [disabled]="modalForm.invalid">Spremi</button>
+          </div>
+        </div>
+      </form>
+    </div>
   </div>
 </section>
