@@ -172,7 +172,7 @@
             </select>
           </label>
 
-          <label *ngIf="showStatus(inspectorForm.get('type')?.value as any)">
+          <label *ngIf="showStatus($any(inspectorForm.get('type')?.value))">
             Status
             <select formControlName="status">
               <option *ngFor="let status of statusOptions" [value]="status">{{ status }}</option>

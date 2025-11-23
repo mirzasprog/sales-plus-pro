@@ -35,6 +35,7 @@ export class LayoutDesignerComponent implements OnInit, OnDestroy, AfterViewInit
   ];
 
   readonly statusOptions: PositionStatus[] = ['Available', 'Reserved', 'Occupied', 'ExpiringSoon', 'Inactive'];
+  drawMode: DesignerElementType | null = null;
   zoom = 1;
   panX = 0;
   panY = 0;
@@ -114,13 +115,14 @@ export class LayoutDesignerComponent implements OnInit, OnDestroy, AfterViewInit
     setTimeout(() => this.fitToContent(), 0);
   }
 
-  ngAfterViewInit(): void {
-    setTimeout(() => this.fitToContent(), 0);
-  }
-
   ngOnDestroy(): void {
     this.destroy$.next();
     this.destroy$.complete();
+  }
+
+  handlePaletteClick(type: DesignerElementType): void {
+    this.drawMode = type === 'Wall' ? type : null;
+    this.addElement(type);
   }
 
   addElement(type: DesignerElementType): void {
