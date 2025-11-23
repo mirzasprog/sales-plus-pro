@@ -26,6 +26,9 @@ export interface DesignerElement {
   supplier?: string;
   note?: string;
   updatedAt?: string;
+  price?: number;
+  contractStart?: string;
+  contractEnd?: string;
 }
 
 export interface LayoutDefinition {

@@ -47,6 +47,9 @@ export class LayoutDesignerComponent implements OnInit, AfterViewInit, OnDestroy
   readonly gridSize = 20;
   snapToGrid = true;
   zoom = 1;
+  contextMenu = { visible: false, x: 0, y: 0, targetId: '' };
+  editModal = { open: false, elementId: '' };
+  readonly constructionTypes: DesignerElementType[] = ['Wall', 'Door', 'Window', 'Entrance', 'Cash Register'];
   private isPanning = false;
   private panOrigin: { x: number; y: number; stageX: number; stageY: number } | null = null;
   private stage?: Stage;
@@ -82,6 +85,22 @@ export class LayoutDesignerComponent implements OnInit, AfterViewInit, OnDestroy
     y: [0],
     supplier: [''],
     note: ['']
+  });
+
+  readonly modalForm = this.fb.group({
+    label: ['', [Validators.required, Validators.minLength(3)]],
+    type: ['Gondola' as DesignerElementType, Validators.required],
+    status: ['Available' as PositionStatus],
+    width: [0, [Validators.required, Validators.min(10), Validators.max(2000)]],
+    height: [0, [Validators.required, Validators.min(10), Validators.max(2000)]],
+    x: [0],
+    y: [0],
+    rotation: [0, [Validators.min(-180), Validators.max(180)]],
+    supplier: [''],
+    note: [''],
+    price: [null],
+    contractStart: [''],
+    contractEnd: ['']
   });
 
   constructor(private readonly layoutService: LayoutService, private readonly fb: FormBuilder) {}
@@ -164,25 +183,48 @@ export class LayoutDesignerComponent implements OnInit, AfterViewInit, OnDestroy
   }
 
   handlePaletteClick(type: DesignerElementType): void {
+    this.spawnElement(type, { x: 60, y: 60 });
+  }
+
+  handlePaletteDragStart(event: DragEvent, type: DesignerElementType): void {
+    // enable native drag metadata so we can create fixtures on drop
+    event.dataTransfer?.setData('application/element-type', type);
+    event.dataTransfer?.setData('text/plain', type);
+    event.dataTransfer?.setDragImage(new Image(), 0, 0);
+  }
+
+  handleCanvasDragOver(event: DragEvent): void {
+    // prevent default so drop fires on the Konva container
+    event.preventDefault();
+    if (event.dataTransfer) {
+      event.dataTransfer.dropEffect = 'copy';
+    }
+  }
+
+  handleCanvasDrop(event: DragEvent): void {
+    // create a new element at the drop location (with snapping if enabled)
+    event.preventDefault();
+    const type = event.dataTransfer?.getData('application/element-type') as DesignerElementType;
+    const stage = this.stage;
+    if (!type || !stage) {
+      return;
+    }
+    stage.setPointersPositions(event as any);
+    const pointer = stage.getPointerPosition();
+    if (!pointer) {
+      return;
+    }
     const defaults = this.defaultDimensions(type);
-    const element: DesignerElement = {
-      id: uuidv4(),
-      label: `${this.typeStyles[type]?.label ?? type} ${Math.floor(Math.random() * 90 + 10)}`,
-      type,
-      status: 'Available',
-      width: defaults.width,
-      height: defaults.height,
-      x: 60,
-      y: 60,
-      rotation: 0,
-      supplier: defaults.supplier,
-      note: defaults.note
+    const position = {
+      x: pointer.x - defaults.width / 2,
+      y: pointer.y - defaults.height / 2
     };
-    this.layoutService.addElement(element);
+    this.spawnElement(type, position);
+    this.contextMenu.visible = false;
   }
 
   showStatus(type: DesignerElementType): boolean {
-    return !['Door', 'Window', 'Cash Register', 'Wall'].includes(type);
+    return !this.isConstruction(type);
   }
 
   undo(): void {
@@ -195,18 +237,45 @@ export class LayoutDesignerComponent implements OnInit, AfterViewInit, OnDestroy
     this.updateTransformerSelection();
   }
 
+  duplicateFromContext(): void {
+    if (this.contextMenu.targetId) {
+      this.duplicateElement(this.contextMenu.targetId);
+    }
+  }
+
+  deleteFromContext(): void {
+    if (this.contextMenu.targetId) {
+      this.removeElement(this.contextMenu.targetId);
+    }
+  }
+
+  bringToFront(): void {
+    if (this.contextMenu.targetId) {
+      this.moveLayer(this.contextMenu.targetId, 'front');
+    }
+  }
+
+  sendToBack(): void {
+    if (this.contextMenu.targetId) {
+      this.moveLayer(this.contextMenu.targetId, 'back');
+    }
+  }
+
   clearSelection(): void {
     this.layoutService.selectElements([]);
+    this.contextMenu.visible = false;
     this.updateTransformerSelection();
   }
 
   clearLayout(): void {
     this.layoutService.clearLayout();
+    this.contextMenu.visible = false;
     this.updateTransformerSelection();
   }
 
   resetToDemo(): void {
     this.layoutService.loadDemoLayout();
+    this.contextMenu.visible = false;
     this.updateTransformerSelection();
   }
 
@@ -318,6 +387,7 @@ export class LayoutDesignerComponent implements OnInit, AfterViewInit, OnDestroy
     });
 
     stage.on('mousedown touchstart', (evt: KonvaEventObject<MouseEvent | TouchEvent>) => {
+      this.contextMenu.visible = false;
       const point = evt.evt instanceof TouchEvent ? evt.evt.touches[0] : evt.evt;
       if (evt.target === stage) {
         this.isPanning = true;
@@ -491,6 +561,23 @@ export class LayoutDesignerComponent implements OnInit, AfterViewInit, OnDestroy
         this.handleElementSelection(element.id, evt.evt.shiftKey || evt.evt.metaKey);
       });
 
+      group.on('dblclick dbltap', () => {
+        // double click opens the quick edit modal
+        this.openFixtureModal(element);
+      });
+
+      group.on('contextmenu', (evt: KonvaEventObject<MouseEvent>) => {
+        // right click shows a contextual menu for duplicate/delete/layering
+        evt.evt.preventDefault();
+        this.handleElementSelection(element.id, evt.evt.shiftKey || evt.evt.metaKey);
+        this.contextMenu = {
+          visible: true,
+          x: evt.evt.clientX,
+          y: evt.evt.clientY,
+          targetId: element.id
+        };
+      });
+
       layer.add(group);
     });
 
@@ -503,6 +590,7 @@ export class LayoutDesignerComponent implements OnInit, AfterViewInit, OnDestroy
     const current = this.layoutService.selectedIds;
     const next = multiSelect ? (current.includes(id) ? current.filter((item) => item !== id) : [...current, id]) : [id];
     this.layoutService.selectElements(next);
+    this.contextMenu.visible = false;
     this.updateTransformerSelection();
   }
 
@@ -539,6 +627,111 @@ export class LayoutDesignerComponent implements OnInit, AfterViewInit, OnDestroy
 
   typeStyle(type: DesignerElementType): { icon: string; color: string; fill: string; label: string } {
     return this.typeStyles[type] ?? { icon: '⬜', color: '#334155', fill: 'rgba(51, 65, 85, 0.14)', label: type };
+  }
+
+  isConstruction(type: DesignerElementType): boolean {
+    return this.constructionTypes.includes(type);
+  }
+
+  private spawnElement(type: DesignerElementType, position: { x: number; y: number }): void {
+    // central helper for palette click/drag-drop to respect snapping and defaults
+    const defaults = this.defaultDimensions(type);
+    const baseX = this.snapToGrid ? Math.round(position.x / this.gridSize) * this.gridSize : position.x;
+    const baseY = this.snapToGrid ? Math.round(position.y / this.gridSize) * this.gridSize : position.y;
+    const element: DesignerElement = {
+      id: uuidv4(),
+      label: `${this.typeStyles[type]?.label ?? type} ${Math.floor(Math.random() * 90 + 10)}`,
+      type,
+      status: 'Available',
+      width: defaults.width,
+      height: defaults.height,
+      x: Math.max(0, baseX),
+      y: Math.max(0, baseY),
+      rotation: 0,
+      supplier: this.isConstruction(type) ? undefined : defaults.supplier,
+      note: defaults.note
+    };
+    this.layoutService.addElement(element);
+  }
+
+  private duplicateElement(id: string): void {
+    const original = this.layoutService.snapshot.find((item) => item.id === id);
+    if (!original) {
+      return;
+    }
+    const copy: DesignerElement = {
+      ...original,
+      id: uuidv4(),
+      label: `${original.label} (kopija)`,
+      x: original.x + 20,
+      y: original.y + 20,
+      updatedAt: new Date().toISOString()
+    };
+    this.layoutService.addElement(copy);
+    this.contextMenu.visible = false;
+  }
+
+  private removeElement(id: string): void {
+    this.layoutService.removeElement(id);
+    this.contextMenu.visible = false;
+  }
+
+  private moveLayer(id: string, direction: 'front' | 'back'): void {
+    const elements = [...this.layoutService.snapshot];
+    const index = elements.findIndex((el) => el.id === id);
+    if (index === -1) {
+      return;
+    }
+    const [item] = elements.splice(index, 1);
+    if (direction === 'front') {
+      elements.push(item);
+    } else {
+      elements.unshift(item);
+    }
+    this.layoutService.importElements(elements);
+    this.layoutService.selectElement(id);
+    this.contextMenu.visible = false;
+  }
+
+  private openFixtureModal(element: DesignerElement): void {
+    this.editModal = { open: true, elementId: element.id };
+    this.layoutService.selectElement(element.id);
+    this.updateTransformerSelection();
+    this.modalForm.patchValue({
+      ...element
+    });
+    if (this.isConstruction(element.type)) {
+      this.modalForm.patchValue({ status: 'Available', supplier: '' }, { emitEvent: false });
+    }
+  }
+
+  closeModal(): void {
+    this.editModal = { open: false, elementId: '' };
+  }
+
+  saveModal(): void {
+    if (!this.editModal.elementId || this.modalForm.invalid) {
+      return;
+    }
+    const existing = this.layoutService.snapshot.find((item) => item.id === this.editModal.elementId);
+    if (!existing) {
+      return;
+    }
+    const formValue = this.modalForm.value;
+    const cleanedSupplier = this.isConstruction(formValue.type as DesignerElementType) ? undefined : formValue.supplier ?? existing.supplier;
+    const cleanedStatus = this.isConstruction(formValue.type as DesignerElementType)
+      ? existing.status
+      : ((formValue.status as PositionStatus) ?? existing.status);
+    const updated: DesignerElement = {
+      ...existing,
+      ...formValue,
+      status: cleanedStatus,
+      supplier: cleanedSupplier,
+      rotation: Math.round(formValue.rotation ?? existing.rotation)
+    } as DesignerElement;
+    this.layoutService.updateElement(updated);
+    this.updateTransformerSelection();
+    this.closeModal();
   }
 
   private defaultDimensions(type: DesignerElementType): { width: number; height: number; note?: string; supplier?: string } {
