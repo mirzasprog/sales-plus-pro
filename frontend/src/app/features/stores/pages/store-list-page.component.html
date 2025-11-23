@@ -1,0 +1,75 @@
+<section class="page-header">
+  <div>
+    <p class="eyebrow">Store Management</p>
+    <h1>Prodajni objekti i KPI</h1>
+    <p class="muted">Praćenje popunjenosti, ugovora i prihoda po objektu.</p>
+  </div>
+  <form [formGroup]="filterForm" class="filters" novalidate>
+    <label>
+      Pretraga
+      <input type="search" formControlName="search" placeholder="Naziv ili šifra objekta" />
+    </label>
+    <label>
+      Grad
+      <input type="text" formControlName="city" placeholder="Zagreb, Split..." />
+    </label>
+    <label>
+      Ističe u (dana)
+      <input type="number" min="7" max="180" formControlName="expiringInDays" />
+    </label>
+  </form>
+</section>
+
+<section class="kpis" *ngIf="summary$ | async as summary">
+  <app-kpi-card title="Popunjenost" [value]="summary.occupancy + '%'" subtitle="Aktivne zauzete pozicije"></app-kpi-card>
+  <app-kpi-card title="Slobodne pozicije" [value]="summary.free" subtitle="Moguće za nove dobavljače"></app-kpi-card>
+  <app-kpi-card title="Prihod (aktivni)" [value]="summary.revenue | number: '1.0-0'" subtitle="Zbroj aktivnih zakupnina"></app-kpi-card>
+  <app-kpi-card title="Ugovori koji ističu" [value]="summary.expiring" subtitle="Potrebna produljenja"></app-kpi-card>
+</section>
+
+<section class="card">
+  <header class="card__header">
+    <div>
+      <h2>Objekti</h2>
+      <p class="muted">Detaljan pregled po objektu s popunjenošću i prihodima.</p>
+    </div>
+  </header>
+  <div class="table" *ngIf="stores$ | async as stores">
+    <div class="table__head">
+      <div>Objekt</div>
+      <div>Grad</div>
+      <div>Pozicije</div>
+      <div>Popunjenost</div>
+      <div>Ugovori</div>
+      <div>Prihod</div>
+      <div>Planovi</div>
+    </div>
+    <div class="table__row" *ngFor="let store of stores">
+      <div>
+        <div class="title">{{ store.name }}</div>
+        <div class="muted">{{ store.code }} • {{ store.street }}</div>
+      </div>
+      <div>{{ store.city }}</div>
+      <div>
+        <strong>{{ store.totalPositions }}</strong>
+        <span class="muted">ukupno</span>
+      </div>
+      <div>
+        <div class="pill">
+          <span class="dot occupied"></span>
+          {{ store.occupied }} zauzeto
+        </div>
+        <div class="pill light">
+          <span class="dot free"></span>
+          {{ store.available }} slobodno
+        </div>
+      </div>
+      <div>
+        <div class="badge warning" *ngIf="store.expiringContracts > 0">{{ store.expiringContracts }} ističe</div>
+        <div class="muted" *ngIf="store.expiringContracts === 0">Sve u redu</div>
+      </div>
+      <div>{{ store.activeRevenue | currency: 'EUR' : 'symbol' : '1.0-0' }}</div>
+      <div>{{ store.layoutCount }} nacrta</div>
+    </div>
+  </div>
+</section>

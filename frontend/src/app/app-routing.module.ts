@@ -18,6 +18,16 @@ const routes: Routes = [
     loadChildren: () => import('./features/positions/positions.module').then((m) => m.PositionsModule)
   },
   {
+    path: 'stores',
+    canActivate: [AuthGuard],
+    loadChildren: () => import('./features/stores/stores.module').then((m) => m.StoresModule)
+  },
+  {
+    path: 'suppliers',
+    canActivate: [AuthGuard],
+    loadChildren: () => import('./features/suppliers/suppliers.module').then((m) => m.SuppliersModule)
+  },
+  {
     path: 'layout',
     canActivate: [AuthGuard],
     loadChildren: () => import('./features/layout-designer/layout-designer.module').then((m) => m.LayoutDesignerModule)

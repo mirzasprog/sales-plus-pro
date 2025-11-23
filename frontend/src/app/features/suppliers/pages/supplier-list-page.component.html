@@ -1,0 +1,50 @@
+<section class="page-header">
+  <div>
+    <p class="eyebrow">Dobavljači</p>
+    <h1>Partneri i zakup ugovori</h1>
+    <p class="muted">Pregled aktivnih ugovora, pokrivenosti po objektima i narednih isteka.</p>
+  </div>
+  <form [formGroup]="filterForm" class="filters" novalidate>
+    <label>
+      Pretraga
+      <input type="search" formControlName="search" placeholder="Naziv dobavljača" />
+    </label>
+    <label>
+      Kategorija
+      <input type="text" formControlName="category" placeholder="prehrana, kozmetika..." />
+    </label>
+  </form>
+</section>
+
+<section class="card" *ngIf="suppliers$ | async as suppliers">
+  <header class="card__header">
+    <h2>Aktivni dobavljači</h2>
+    <span class="muted">{{ suppliers.length }} partnera</span>
+  </header>
+  <div class="table">
+    <div class="table__head">
+      <div>Dobavljač</div>
+      <div>Kategorija</div>
+      <div>Objekti</div>
+      <div>Pozicije</div>
+      <div>Ugovori</div>
+      <div>Aktivni prihod</div>
+      <div>Sljedeći isteka</div>
+    </div>
+    <div class="table__row" *ngFor="let supplier of suppliers">
+      <div>
+        <div class="title">{{ supplier.name }}</div>
+        <div class="muted">#{{ supplier.id | slice:0:6 }}</div>
+      </div>
+      <div>{{ supplier.category || 'N/A' }}</div>
+      <div>{{ supplier.activeStores }}</div>
+      <div>{{ supplier.activePositions }}</div>
+      <div>{{ supplier.activeContracts }}</div>
+      <div>{{ supplier.activeRevenue | currency: 'EUR' : 'symbol' : '1.0-0' }}</div>
+      <div>
+        <span class="badge warning" *ngIf="supplier.nextExpiry as expiry">{{ expiry | date: 'dd.MM.yyyy' }}</span>
+        <span class="muted" *ngIf="!supplier.nextExpiry">nema</span>
+      </div>
+    </div>
+  </div>
+</section>
