@@ -1,14 +1,5 @@
 import { CdkDragEnd } from '@angular/cdk/drag-drop';
-import {
-  ChangeDetectionStrategy,
-  Component,
-  ElementRef,
-  OnDestroy,
-  OnInit,
-  AfterViewInit,
-  ViewChild,
-  HostListener
-} from '@angular/core';
+import { ChangeDetectionStrategy, Component, ElementRef, OnDestroy, OnInit, AfterViewInit, ViewChild } from '@angular/core';
 import { FormBuilder, Validators } from '@angular/forms';
 import { Subject, map, takeUntil } from 'rxjs';
 import { v4 as uuidv4 } from 'uuid';
@@ -49,25 +40,21 @@ export class LayoutDesignerComponent implements OnInit, OnDestroy, AfterViewInit
   panY = 0;
   snapToGrid = true;
   readonly gridSize = 20;
-  isPanning = false;
+  private isPanning = false;
   private lastPanPoint: { x: number; y: number } | null = null;
-  resizing: { id: string; origin: { x: number; y: number }; start: { width: number; height: number; x: number; y: number }; dir: string } | null = null;
-  rotating: { id: string; startAngle: number } | null = null;
-  drawMode: DesignerElementType | null = null;
-  private drawStart: { x: number; y: number; elementId: string } | null = null;
 
   readonly typeStyles: Record<DesignerElementType, { icon: string; color: string; fill: string; label: string }> = {
-    Entrance: { icon: '⇔', color: '#10b981', fill: 'rgba(16, 185, 129, 0.14)', label: 'Ulaz' },
-    Gondola: { icon: '▭', color: '#6366f1', fill: 'rgba(99, 102, 241, 0.14)', label: 'Gondola' },
-    Promo: { icon: '✦', color: '#f59e0b', fill: 'rgba(245, 158, 11, 0.16)', label: 'Promo' },
-    Stand: { icon: '▣', color: '#3b82f6', fill: 'rgba(59, 130, 246, 0.14)', label: 'Stalak' },
-    'Cash Register': { icon: '⌸', color: '#ef4444', fill: 'rgba(239, 68, 68, 0.14)', label: 'Blagajna' },
-    'Display Case': { icon: '▤', color: '#14b8a6', fill: 'rgba(20, 184, 166, 0.16)', label: 'Vitrina' },
-    Shelf: { icon: '▥', color: '#8b5cf6', fill: 'rgba(139, 92, 246, 0.16)', label: 'Polica' },
-    Door: { icon: '⌂', color: '#0ea5e9', fill: 'rgba(14, 165, 233, 0.18)', label: 'Vrata' },
+    Entrance: { icon: '⛩', color: '#10b981', fill: 'rgba(16, 185, 129, 0.14)', label: 'Ulaz' },
+    Gondola: { icon: '🛒', color: '#6366f1', fill: 'rgba(99, 102, 241, 0.14)', label: 'Gondola' },
+    Promo: { icon: '⭐', color: '#f59e0b', fill: 'rgba(245, 158, 11, 0.16)', label: 'Promo' },
+    Stand: { icon: '🧰', color: '#3b82f6', fill: 'rgba(59, 130, 246, 0.14)', label: 'Stalak' },
+    'Cash Register': { icon: '💳', color: '#ef4444', fill: 'rgba(239, 68, 68, 0.14)', label: 'Blagajna' },
+    'Display Case': { icon: '🧊', color: '#14b8a6', fill: 'rgba(20, 184, 166, 0.16)', label: 'Vitrina' },
+    Shelf: { icon: '📚', color: '#8b5cf6', fill: 'rgba(139, 92, 246, 0.16)', label: 'Polica' },
+    Door: { icon: '🚪', color: '#0ea5e9', fill: 'rgba(14, 165, 233, 0.18)', label: 'Vrata' },
     Window: { icon: '🪟', color: '#38bdf8', fill: 'rgba(56, 189, 248, 0.16)', label: 'Prozor' },
-    Wall: { icon: '┃', color: '#475569', fill: 'rgba(15, 23, 42, 0.2)', label: 'Zid' },
-    Counter: { icon: '⌺', color: '#e11d48', fill: 'rgba(225, 29, 72, 0.16)', label: 'Pult' }
+    Wall: { icon: '⬛', color: '#475569', fill: 'rgba(15, 23, 42, 0.2)', label: 'Zid' },
+    Counter: { icon: '🧾', color: '#e11d48', fill: 'rgba(225, 29, 72, 0.16)', label: 'Pult' }
   };
 
   readonly inspectorForm = this.fb.group({
@@ -127,22 +114,16 @@ export class LayoutDesignerComponent implements OnInit, OnDestroy, AfterViewInit
     setTimeout(() => this.fitToContent(), 0);
   }
 
+  ngAfterViewInit(): void {
+    setTimeout(() => this.fitToContent(), 0);
+  }
+
   ngOnDestroy(): void {
     this.destroy$.next();
     this.destroy$.complete();
   }
 
-  handlePaletteClick(type: DesignerElementType): void {
-    if (type === 'Wall') {
-      this.drawMode = 'Wall';
-      this.drawStart = null;
-      return;
-    }
-
-    this.addElement(type);
-  }
-
-  addElement(type: DesignerElementType, position?: { x: number; y: number }): DesignerElement {
+  addElement(type: DesignerElementType): void {
     const defaults = this.defaultDimensions(type);
     const element: DesignerElement = {
       id: uuidv4(),
@@ -151,14 +132,13 @@ export class LayoutDesignerComponent implements OnInit, OnDestroy, AfterViewInit
       status: 'Available',
       width: defaults.width,
       height: defaults.height,
-      x: position?.x ?? 80,
-      y: position?.y ?? 80,
+      x: 80,
+      y: 80,
       rotation: 0,
       note: defaults.note
     };
     this.layoutService.addElement(element);
     this.selectElement(element);
-    return element;
   }
 
   dragEnded(event: CdkDragEnd, element: DesignerElement): void {
@@ -192,7 +172,7 @@ export class LayoutDesignerComponent implements OnInit, OnDestroy, AfterViewInit
       ...formValue,
       label: formValue.label ?? element.label,
       type: formValue.type ?? element.type,
-      status: this.showStatus(element.type) ? formValue.status ?? element.status : element.status,
+      status: formValue.status ?? element.status,
       width: formValue.width ?? element.width,
       height: formValue.height ?? element.height,
       rotation: formValue.rotation ?? 0,
@@ -219,15 +199,6 @@ export class LayoutDesignerComponent implements OnInit, OnDestroy, AfterViewInit
     this.fitToContent();
   }
 
-  onSurfaceMouseDown(event: MouseEvent): void {
-    if (this.drawMode === 'Wall') {
-      this.beginDraw(event);
-      return;
-    }
-
-    this.startPan(event);
-  }
-
   zoomIn(): void {
     this.zoom = this.clampZoom(this.zoom + 0.1);
   }
@@ -244,7 +215,7 @@ export class LayoutDesignerComponent implements OnInit, OnDestroy, AfterViewInit
 
   startPan(event: MouseEvent): void {
     const target = event.target as HTMLElement;
-    if (target.closest('.element') || this.resizing || this.rotating) {
+    if (target.closest('.element')) {
       return;
     }
 
@@ -268,7 +239,6 @@ export class LayoutDesignerComponent implements OnInit, OnDestroy, AfterViewInit
   endPan(): void {
     this.isPanning = false;
     this.lastPanPoint = null;
-    this.finishDraw();
   }
 
   fitToContent(): void {
@@ -328,139 +298,6 @@ export class LayoutDesignerComponent implements OnInit, OnDestroy, AfterViewInit
     return this.typeStyles[type] ?? { icon: '⬜', color: '#334155', fill: 'rgba(51, 65, 85, 0.14)', label: type };
   }
 
-  startResize(event: MouseEvent, element: DesignerElement, direction: string): void {
-    event.stopPropagation();
-    this.resizing = {
-      id: element.id,
-      origin: { x: event.clientX, y: event.clientY },
-      start: { width: element.width, height: element.height, x: element.x, y: element.y },
-      dir: direction
-    };
-  }
-
-  startRotate(event: MouseEvent, element: DesignerElement): void {
-    event.stopPropagation();
-    this.rotating = { id: element.id, startAngle: element.rotation };
-  }
-
-  @HostListener('window:mousemove', ['$event'])
-  handlePointerMove(event: MouseEvent): void {
-    if (this.resizing) {
-      this.performResize(event);
-    } else if (this.rotating) {
-      this.performRotate(event);
-    } else if (this.drawStart) {
-      this.extendDraw(event);
-    }
-  }
-
-  @HostListener('window:mouseup')
-  handlePointerUp(): void {
-    if (this.resizing) {
-      this.resizing = null;
-    }
-    if (this.rotating) {
-      this.rotating = null;
-    }
-    if (this.drawStart) {
-      this.finishDraw();
-    }
-  }
-
-  private performResize(event: MouseEvent): void {
-    if (!this.resizing) {
-      return;
-    }
-
-    const element = this.layoutService.snapshot.find((item) => item.id === this.resizing?.id);
-    if (!element) {
-      return;
-    }
-
-    const dx = (event.clientX - this.resizing.origin.x) / this.zoom;
-    const dy = (event.clientY - this.resizing.origin.y) / this.zoom;
-    let { width, height, x, y } = this.resizing.start;
-
-    if (this.resizing.dir.includes('e')) {
-      width = Math.max(20, this.resizing.start.width + dx);
-    }
-    if (this.resizing.dir.includes('s')) {
-      height = Math.max(20, this.resizing.start.height + dy);
-    }
-    if (this.resizing.dir.includes('w')) {
-      width = Math.max(20, this.resizing.start.width - dx);
-      x = this.resizing.start.x + dx;
-    }
-    if (this.resizing.dir.includes('n')) {
-      height = Math.max(20, this.resizing.start.height - dy);
-      y = this.resizing.start.y + dy;
-    }
-
-    this.layoutService.updateElement({ ...element, width, height, x, y });
-  }
-
-  private performRotate(event: MouseEvent): void {
-    if (!this.rotating) {
-      return;
-    }
-
-    const element = this.layoutService.snapshot.find((item) => item.id === this.rotating?.id);
-    if (!element) {
-      return;
-    }
-
-    const surfaceRect = this.surfaceRef?.nativeElement.getBoundingClientRect();
-    const elementCenterX = surfaceRect
-      ? surfaceRect.left + this.panX + (element.x + element.width / 2) * this.zoom
-      : element.x + element.width / 2;
-    const elementCenterY = surfaceRect
-      ? surfaceRect.top + this.panY + (element.y + element.height / 2) * this.zoom
-      : element.y + element.height / 2;
-    const angle = Math.atan2(event.clientY - elementCenterY, event.clientX - elementCenterX) * (180 / Math.PI);
-    const normalized = Math.round(angle);
-    this.layoutService.updateElement({ ...element, rotation: normalized });
-  }
-
-  private beginDraw(event: MouseEvent): void {
-    if (!this.surfaceRef?.nativeElement || this.drawMode !== 'Wall') {
-      return;
-    }
-    const surfaceRect = this.surfaceRef.nativeElement.getBoundingClientRect();
-    const x = (event.clientX - surfaceRect.left - this.panX) / this.zoom;
-    const y = (event.clientY - surfaceRect.top - this.panY) / this.zoom;
-    const element = this.addElement('Wall', { x, y });
-    this.drawStart = { x, y, elementId: element.id };
-    this.isPanning = false;
-  }
-
-  private extendDraw(event: MouseEvent): void {
-    if (!this.drawStart) {
-      return;
-    }
-
-    const element = this.layoutService.snapshot.find((item) => item.id === this.drawStart?.elementId);
-    const surfaceRect = this.surfaceRef?.nativeElement.getBoundingClientRect();
-    if (!element || !surfaceRect) {
-      return;
-    }
-
-    const currentX = (event.clientX - surfaceRect.left - this.panX) / this.zoom;
-    const currentY = (event.clientY - surfaceRect.top - this.panY) / this.zoom;
-    const dx = currentX - this.drawStart.x;
-    const dy = currentY - this.drawStart.y;
-    const horizontal = Math.abs(dx) >= Math.abs(dy);
-    const width = horizontal ? Math.max(10, Math.abs(dx)) : 22;
-    const height = horizontal ? 22 : Math.max(10, Math.abs(dy));
-    const x = horizontal ? Math.min(this.drawStart.x, currentX) : this.drawStart.x;
-    const y = horizontal ? this.drawStart.y : Math.min(this.drawStart.y, currentY);
-    this.layoutService.updateElement({ ...element, width, height, x, y });
-  }
-
-  private finishDraw(): void {
-    this.drawMode = null;
-    this.drawStart = null;
-  }
-
   private defaultDimensions(type: DesignerElementType): { width: number; height: number; note?: string } {
     switch (type) {
       case 'Entrance':
@@ -472,11 +309,11 @@ export class LayoutDesignerComponent implements OnInit, OnDestroy, AfterViewInit
       case 'Shelf':
         return { width: 160, height: 320, note: 'Polica uz zid s visinom' };
       case 'Door':
-        return { width: 110, height: 32, note: 'Otvor za prolaz – bez statusa' };
+        return { width: 100, height: 24, note: 'Vrata / prolaz' };
       case 'Window':
-        return { width: 220, height: 26, note: 'Standardni prozor / izlog' };
+        return { width: 220, height: 20, note: 'Prozor ili izlog' };
       case 'Wall':
-        return { width: 320, height: 22, note: 'Segment zida – nacrtajte dužinu mišem' };
+        return { width: 400, height: 22, note: 'Segment zida (može se produžiti)' };
       case 'Counter':
         return { width: 220, height: 120, note: 'Pult za usluge ili degustaciju' };
       case 'Promo':

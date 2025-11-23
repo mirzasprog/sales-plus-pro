@@ -60,7 +60,7 @@
       <div
         #surface
         class="canvas__surface"
-        (mousedown)="onSurfaceMouseDown($event)"
+        (mousedown)="startPan($event)"
         (mousemove)="pan($event)"
         (mouseup)="endPan()"
         (mouseleave)="endPan()"
@@ -82,7 +82,6 @@
             [style.borderColor]="statusColor(element.status)"
             [style.transform]="'rotate(' + element.rotation + 'deg)'"
             [style.background]="typeStyle(element.type).fill"
-            [attr.data-type]="element.type"
           >
             <header>
               <div class="element__title">
@@ -94,7 +93,7 @@
                   <p class="meta">{{ typeStyle(element.type).label }} • {{ element.type }}</p>
                 </div>
               </div>
-              <app-position-status-badge *ngIf="showStatus(element.type)" [status]="element.status"></app-position-status-badge>
+              <app-position-status-badge [status]="element.status"></app-position-status-badge>
             </header>
             <p class="meta dimensions">{{ element.width }}×{{ element.height }} cm • X: {{ element.x }}, Y: {{ element.y }}</p>
             <p class="note" *ngIf="element.note">{{ element.note }}</p>
