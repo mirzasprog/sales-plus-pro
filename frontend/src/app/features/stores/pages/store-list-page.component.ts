@@ -1,8 +1,9 @@
 import { ChangeDetectionStrategy, Component, OnInit } from '@angular/core';
-import { FormBuilder } from '@angular/forms';
+import { FormBuilder, Validators } from '@angular/forms';
 import { Observable } from 'rxjs';
 import { map, startWith, switchMap } from 'rxjs/operators';
 import { StoreService } from '../../../core/services/store.service';
+import { NotificationService } from '../../../core/services/notification.service';
 import { Store } from '../../../shared/models/store.model';
 
 @Component({
@@ -18,10 +19,29 @@ export class StoreListPageComponent implements OnInit {
     expiringInDays: [30]
   });
 
+  readonly createForm = this.fb.group({
+    code: ['', Validators.required],
+    name: ['', Validators.required],
+    street: ['', Validators.required],
+    city: ['', Validators.required],
+    totalPositions: [0, [Validators.required, Validators.min(0)]],
+    occupied: [0, [Validators.required, Validators.min(0)]],
+    available: [0, [Validators.required, Validators.min(0)]],
+    reserved: [0, [Validators.required, Validators.min(0)]],
+    inactive: [0, [Validators.required, Validators.min(0)]],
+    expiringContracts: [0, [Validators.required, Validators.min(0)]],
+    activeRevenue: [0, [Validators.required, Validators.min(0)]],
+    layoutCount: [0, [Validators.required, Validators.min(0)]]
+  });
+
   stores$!: Observable<Store[]>;
   summary$!: Observable<{ occupancy: number; free: number; revenue: number; expiring: number }>;
 
-  constructor(private readonly fb: FormBuilder, private readonly storeService: StoreService) {}
+  constructor(
+    private readonly fb: FormBuilder,
+    private readonly storeService: StoreService,
+    private readonly notifications: NotificationService
+  ) {}
 
   ngOnInit(): void {
     const filters$ = this.filterForm.valueChanges.pipe(startWith(this.filterForm.value));
@@ -58,5 +78,46 @@ export class StoreListPageComponent implements OnInit {
         };
       })
     );
+  }
+
+  addStore(): void {
+    if (this.createForm.invalid) {
+      this.createForm.markAllAsTouched();
+      return;
+    }
+
+    const value = this.createForm.value;
+    this.storeService
+      .create({
+        code: value.code ?? '',
+        name: value.name ?? '',
+        street: value.street ?? '',
+        city: value.city ?? '',
+        totalPositions: Number(value.totalPositions ?? 0),
+        occupied: Number(value.occupied ?? 0),
+        available: Number(value.available ?? 0),
+        reserved: Number(value.reserved ?? 0),
+        inactive: Number(value.inactive ?? 0),
+        expiringContracts: Number(value.expiringContracts ?? 0),
+        activeRevenue: Number(value.activeRevenue ?? 0),
+        layoutCount: Number(value.layoutCount ?? 0)
+      })
+      .subscribe(() => {
+        this.notifications.push({ message: 'Novi objekat dodan', type: 'success' });
+        this.createForm.reset({
+          code: '',
+          name: '',
+          street: '',
+          city: '',
+          totalPositions: 0,
+          occupied: 0,
+          available: 0,
+          reserved: 0,
+          inactive: 0,
+          expiringContracts: 0,
+          activeRevenue: 0,
+          layoutCount: 0
+        });
+      });
   }
 }

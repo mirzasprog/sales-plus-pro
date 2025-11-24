@@ -1,13 +1,57 @@
 <section class="positions">
-  <form [formGroup]="filterForm" class="filter">
-    <input type="search" placeholder="Pretraži pozicije..." formControlName="search" />
-    <select formControlName="status">
-      <option value="">Status</option>
-      <option *ngFor="let status of statusOptions" [value]="status">{{ status }}</option>
-    </select>
-    <input type="text" placeholder="Dobavljač" formControlName="supplier" />
-    <input type="text" placeholder="Tip elementa" formControlName="type" />
-  </form>
+  <div class="panel">
+    <form [formGroup]="filterForm" class="filter">
+      <input type="search" placeholder="Pretraži pozicije..." formControlName="search" />
+      <select formControlName="status">
+        <option value="">Status</option>
+        <option *ngFor="let status of statusOptions" [value]="status">{{ status }}</option>
+      </select>
+      <input type="text" placeholder="Dobavljač" formControlName="supplier" />
+      <input type="text" placeholder="Tip elementa" formControlName="type" />
+    </form>
+
+    <form [formGroup]="createForm" class="create" novalidate (ngSubmit)="addPosition()">
+      <div class="field-grid">
+        <label>
+          Naziv pozicije
+          <input type="text" formControlName="name" placeholder="End-cap, gondola..." required />
+        </label>
+        <label>
+          Objekat
+          <input type="text" formControlName="retailObjectName" placeholder="Shopping centar" required />
+        </label>
+        <label>
+          Tip pozicije
+          <input type="text" formControlName="positionType" placeholder="Stalak, police" required />
+        </label>
+        <label>
+          Status
+          <select formControlName="status" required>
+            <option *ngFor="let status of statusOptions" [value]="status">{{ status }}</option>
+          </select>
+        </label>
+        <label>
+          Dobavljač
+          <input type="text" formControlName="supplier" placeholder="(opcionalno)" />
+        </label>
+        <label>
+          Širina (cm)
+          <input type="number" min="1" formControlName="widthCm" />
+        </label>
+        <label>
+          Visina (cm)
+          <input type="number" min="1" formControlName="heightCm" />
+        </label>
+        <label class="full">
+          Napomena
+          <textarea rows="2" formControlName="note" placeholder="Dodatni detalji"></textarea>
+        </label>
+      </div>
+      <div class="actions">
+        <button type="submit">Dodaj poziciju</button>
+      </div>
+    </form>
+  </div>
 
   <div class="position-list" *ngIf="positions$ | async as positions">
     <article class="card position" *ngFor="let position of positions">
