@@ -8,4 +8,11 @@ export interface RetailObject {
   country?: string;
   layoutCount?: number;
   positionCount?: number;
+  totalPositions?: number;
+  occupied?: number;
+  available?: number;
+  reserved?: number;
+  inactive?: number;
+  expiringContracts?: number;
+  activeRevenue?: number;
 }

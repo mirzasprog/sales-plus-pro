@@ -12,7 +12,7 @@ export class SupplierService {
     return this.api.get<Supplier[]>('dashboard/suppliers', params);
   }
 
-  create(payload: Supplier): Observable<Supplier> {
+  create(payload: Omit<Supplier, 'id'>): Observable<Supplier> {
     return this.api
       .post<Supplier>('brands', { name: payload.name, category: payload.category })
       .pipe(map((brand) => ({ ...payload, id: brand.id })));
