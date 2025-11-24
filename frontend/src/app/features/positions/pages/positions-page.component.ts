@@ -1,6 +1,6 @@
 import { ChangeDetectionStrategy, Component, OnInit } from '@angular/core';
 import { FormBuilder, Validators } from '@angular/forms';
-import { Observable } from 'rxjs';
+import { combineLatest, Observable } from 'rxjs';
 import { map, startWith, switchMap, take } from 'rxjs/operators';
 import { PositionService } from '../../../core/services/position.service';
 import { NotificationService } from '../../../core/services/notification.service';
@@ -177,31 +177,32 @@ export class PositionsPageComponent implements OnInit {
   }
 
   exportReport(): void {
-    this.positions$.pipe(take(1)).subscribe((positions) => {
-      const filters = this.filterForm.value;
-      this.reportExport.exportToXlsx({
-        data: positions,
-        fileName: 'pozicije-izvjestaj',
-        worksheetName: 'Pozicije',
-        criteria: {
-          Pretraga: filters.search || undefined,
-          Status: filters.status || undefined,
-          Dobavljač: filters.supplier || undefined,
-          Tip: filters.type || undefined
-        },
-        mapRow: (position) => ({
-          Naziv: position.name,
-          Objekat: position.retailObjectName,
-          Tip: position.positionType,
-          Status: position.status,
-          Dobavljač: position.supplier ?? '—',
-          Širina: `${position.widthCm} cm`,
-          Visina: `${position.heightCm} cm`,
-          Površina: `${position.widthCm * position.heightCm} cm²`,
-          Napomena: position.note ?? '—'
-        })
+    combineLatest([this.positions$, this.filterForm.valueChanges.pipe(startWith(this.filterForm.value))])
+      .pipe(take(1))
+      .subscribe(([positions, filters]) => {
+        this.reportExport.exportToXlsx({
+          data: positions,
+          fileName: 'pozicije-izvjestaj',
+          worksheetName: 'Pozicije',
+          criteria: {
+            Pretraga: filters.search || undefined,
+            Status: filters.status || undefined,
+            Dobavljač: filters.supplier || undefined,
+            Tip: filters.type || undefined
+          },
+          mapRow: (position) => ({
+            Naziv: position.name,
+            Objekat: position.retailObjectName,
+            Tip: position.positionType,
+            Status: position.status,
+            Dobavljač: position.supplier ?? '—',
+            Širina: `${position.widthCm} cm`,
+            Visina: `${position.heightCm} cm`,
+            Površina: `${position.widthCm * position.heightCm} cm²`,
+            Napomena: position.note ?? '—'
+          })
+        });
+        this.notifications.push({ message: 'XLSX izvještaj generisan', type: 'success' });
       });
-      this.notifications.push({ message: 'XLSX izvještaj generisan', type: 'success' });
-    });
   }
 }
