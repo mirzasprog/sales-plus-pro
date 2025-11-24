@@ -1,9 +1,10 @@
 import { ChangeDetectionStrategy, Component, OnInit } from '@angular/core';
 import { FormBuilder, Validators } from '@angular/forms';
 import { Observable } from 'rxjs';
-import { map, startWith, switchMap } from 'rxjs/operators';
+import { map, startWith, switchMap, take } from 'rxjs/operators';
 import { StoreService } from '../../../core/services/store.service';
 import { NotificationService } from '../../../core/services/notification.service';
+import { ReportExportService } from '../../../core/services/report-export.service';
 import { Store } from '../../../shared/models/store.model';
 
 @Component({
@@ -36,11 +37,28 @@ export class StoreListPageComponent implements OnInit {
 
   stores$!: Observable<Store[]>;
   summary$!: Observable<{ occupancy: number; free: number; revenue: number; expiring: number }>;
+  editingStore: Store | null = null;
+
+  readonly editForm = this.fb.group({
+    code: ['', Validators.required],
+    name: ['', Validators.required],
+    street: ['', Validators.required],
+    city: ['', Validators.required],
+    totalPositions: [0, [Validators.required, Validators.min(0)]],
+    occupied: [0, [Validators.required, Validators.min(0)]],
+    available: [0, [Validators.required, Validators.min(0)]],
+    reserved: [0, [Validators.required, Validators.min(0)]],
+    inactive: [0, [Validators.required, Validators.min(0)]],
+    expiringContracts: [0, [Validators.required, Validators.min(0)]],
+    activeRevenue: [0, [Validators.required, Validators.min(0)]],
+    layoutCount: [0, [Validators.required, Validators.min(0)]]
+  });
 
   constructor(
     private readonly fb: FormBuilder,
     private readonly storeService: StoreService,
-    private readonly notifications: NotificationService
+    private readonly notifications: NotificationService,
+    private readonly reportExport: ReportExportService
   ) {}
 
   ngOnInit(): void {
@@ -119,5 +137,104 @@ export class StoreListPageComponent implements OnInit {
           layoutCount: 0
         });
       });
+  }
+
+  startEdit(store: Store): void {
+    this.editingStore = store;
+    this.editForm.patchValue({
+      code: store.code,
+      name: store.name,
+      street: store.street,
+      city: store.city,
+      totalPositions: store.totalPositions,
+      occupied: store.occupied,
+      available: store.available,
+      reserved: store.reserved,
+      inactive: store.inactive,
+      expiringContracts: store.expiringContracts,
+      activeRevenue: store.activeRevenue,
+      layoutCount: store.layoutCount
+    });
+  }
+
+  cancelEdit(): void {
+    this.editingStore = null;
+    this.editForm.reset({
+      code: '',
+      name: '',
+      street: '',
+      city: '',
+      totalPositions: 0,
+      occupied: 0,
+      available: 0,
+      reserved: 0,
+      inactive: 0,
+      expiringContracts: 0,
+      activeRevenue: 0,
+      layoutCount: 0
+    });
+  }
+
+  saveEdit(): void {
+    if (!this.editingStore) {
+      return;
+    }
+
+    if (this.editForm.invalid) {
+      this.editForm.markAllAsTouched();
+      return;
+    }
+
+    const value = this.editForm.value;
+    const updated: Store = {
+      ...this.editingStore,
+      code: value.code ?? '',
+      name: value.name ?? '',
+      street: value.street ?? '',
+      city: value.city ?? '',
+      totalPositions: Number(value.totalPositions ?? 0),
+      occupied: Number(value.occupied ?? 0),
+      available: Number(value.available ?? 0),
+      reserved: Number(value.reserved ?? 0),
+      inactive: Number(value.inactive ?? 0),
+      expiringContracts: Number(value.expiringContracts ?? 0),
+      activeRevenue: Number(value.activeRevenue ?? 0),
+      layoutCount: Number(value.layoutCount ?? 0)
+    };
+
+    this.storeService.update(updated).subscribe(() => {
+      this.notifications.push({ message: `${updated.name} ažuriran`, type: 'success' });
+      this.cancelEdit();
+    });
+  }
+
+  exportReport(): void {
+    this.stores$.pipe(take(1)).subscribe((stores) => {
+      const filters = this.filterForm.value;
+      this.reportExport.exportToXlsx({
+        data: stores,
+        fileName: 'objekti-izvjestaj',
+        worksheetName: 'Objekti',
+        criteria: {
+          Pretraga: filters.search || undefined,
+          Grad: filters.city || undefined,
+          'Ističe u (dana)': filters.expiringInDays || undefined
+        },
+        mapRow: (store) => ({
+          Šifra: store.code,
+          Naziv: store.name,
+          Adresa: `${store.street}, ${store.city}`,
+          'Pozicije ukupno': store.totalPositions,
+          Zauzeto: store.occupied,
+          Slobodno: store.available,
+          Rezervisano: store.reserved,
+          Neaktivno: store.inactive,
+          'Ističe ugovora': store.expiringContracts,
+          Prihod: store.activeRevenue,
+          'Broj nacrta': store.layoutCount
+        })
+      });
+      this.notifications.push({ message: 'XLSX izvještaj za objekte generisan', type: 'success' });
+    });
   }
 }

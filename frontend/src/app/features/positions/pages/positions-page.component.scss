@@ -10,6 +10,14 @@
   grid-template-columns: 1fr;
 }
 
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  justify-content: space-between;
+}
+
 .filter {
   display: flex;
   flex-wrap: wrap;
@@ -75,6 +83,19 @@ textarea {
   justify-content: flex-end;
 }
 
+.form-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.button-row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
 .position-list {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
@@ -101,6 +122,17 @@ button {
   border-radius: 12px;
   font-weight: 600;
   cursor: pointer;
+}
+
+button.secondary {
+  background: #0ea5e9;
+  color: #fff;
+}
+
+button.ghost {
+  background: transparent;
+  border: 1px solid #cbd5f5;
+  color: #0f172a;
 }
 
 .full {

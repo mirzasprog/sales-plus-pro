@@ -5,20 +5,23 @@
     <p class="muted">Praćenje popunjenosti, ugovora i prihoda po objektu.</p>
   </div>
   <div class="forms">
-    <form [formGroup]="filterForm" class="filters" novalidate>
-      <label>
-        Pretraga
-        <input type="search" formControlName="search" placeholder="Naziv ili šifra objekta" />
-      </label>
-      <label>
-        Grad
-        <input type="text" formControlName="city" placeholder="Zagreb, Split..." />
-      </label>
-      <label>
-        Ističe u (dana)
-        <input type="number" min="7" max="180" formControlName="expiringInDays" />
-      </label>
-    </form>
+    <div class="filters">
+      <form [formGroup]="filterForm" novalidate>
+        <label>
+          Pretraga
+          <input type="search" formControlName="search" placeholder="Naziv ili šifra objekta" />
+        </label>
+        <label>
+          Grad
+          <input type="text" formControlName="city" placeholder="Zagreb, Split..." />
+        </label>
+        <label>
+          Ističe u (dana)
+          <input type="number" min="7" max="180" formControlName="expiringInDays" />
+        </label>
+      </form>
+      <button type="button" class="secondary" (click)="exportReport()">Izvezi XLSX</button>
+    </div>
 
     <form [formGroup]="createForm" class="create" novalidate (ngSubmit)="addStore()">
       <div class="field-grid">
@@ -75,6 +78,76 @@
         <button type="submit">Dodaj objekat</button>
       </div>
     </form>
+
+    <form
+      *ngIf="editingStore"
+      [formGroup]="editForm"
+      class="create"
+      novalidate
+      (ngSubmit)="saveEdit()"
+    >
+      <div class="form-header">
+        <div>
+          <p class="eyebrow">Uredi objekat</p>
+          <h3>{{ editingStore?.name }}</h3>
+        </div>
+        <button type="button" class="ghost" (click)="cancelEdit()">Zatvori</button>
+      </div>
+
+      <div class="field-grid">
+        <label>
+          Šifra objekta
+          <input type="text" formControlName="code" placeholder="OBJ-100" required />
+        </label>
+        <label>
+          Naziv
+          <input type="text" formControlName="name" placeholder="Prodajni centar" required />
+        </label>
+        <label>
+          Ulica
+          <input type="text" formControlName="street" placeholder="Ulica 1" required />
+        </label>
+        <label>
+          Grad
+          <input type="text" formControlName="city" placeholder="Zagreb" required />
+        </label>
+        <label>
+          Pozicija ukupno
+          <input type="number" min="0" formControlName="totalPositions" />
+        </label>
+        <label>
+          Zauzeto
+          <input type="number" min="0" formControlName="occupied" />
+        </label>
+        <label>
+          Slobodno
+          <input type="number" min="0" formControlName="available" />
+        </label>
+        <label>
+          Rezervirano
+          <input type="number" min="0" formControlName="reserved" />
+        </label>
+        <label>
+          Neaktivno
+          <input type="number" min="0" formControlName="inactive" />
+        </label>
+        <label>
+          Ugovori koji ističu
+          <input type="number" min="0" formControlName="expiringContracts" />
+        </label>
+        <label>
+          Prihod (EUR)
+          <input type="number" min="0" formControlName="activeRevenue" />
+        </label>
+        <label>
+          Broj nacrta
+          <input type="number" min="0" formControlName="layoutCount" />
+        </label>
+      </div>
+      <div class="actions">
+        <button type="submit">Sačuvaj izmjene</button>
+      </div>
+    </form>
   </div>
 </section>
 
@@ -101,6 +174,7 @@
       <div>Ugovori</div>
       <div>Prihod</div>
       <div>Planovi</div>
+      <div>Akcije</div>
     </div>
     <div class="table__row" *ngFor="let store of stores">
       <div>
@@ -128,6 +202,9 @@
       </div>
       <div>{{ store.activeRevenue | currency: 'EUR' : 'symbol' : '1.0-0' }}</div>
       <div>{{ store.layoutCount }} nacrta</div>
+      <div>
+        <button type="button" class="ghost" (click)="startEdit(store)">Uredi</button>
+      </div>
     </div>
   </div>
 </section>

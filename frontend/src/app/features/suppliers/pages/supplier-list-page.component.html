@@ -5,16 +5,19 @@
     <p class="muted">Pregled aktivnih ugovora, pokrivenosti po objektima i narednih isteka.</p>
   </div>
   <div class="forms">
-    <form [formGroup]="filterForm" class="filters" novalidate>
-      <label>
-        Pretraga
-        <input type="search" formControlName="search" placeholder="Naziv dobavljača" />
-      </label>
-      <label>
-        Kategorija
-        <input type="text" formControlName="category" placeholder="prehrana, kozmetika..." />
-      </label>
-    </form>
+    <div class="filters">
+      <form [formGroup]="filterForm" novalidate>
+        <label>
+          Pretraga
+          <input type="search" formControlName="search" placeholder="Naziv dobavljača" />
+        </label>
+        <label>
+          Kategorija
+          <input type="text" formControlName="category" placeholder="prehrana, kozmetika..." />
+        </label>
+      </form>
+      <button type="button" class="secondary" (click)="exportReport()">Izvezi XLSX</button>
+    </div>
 
     <form [formGroup]="createForm" class="create" novalidate (ngSubmit)="addSupplier()">
       <div class="field-pair">
@@ -55,6 +58,60 @@
         <button type="submit">Dodaj dobavljača</button>
       </div>
     </form>
+
+    <form
+      *ngIf="editingSupplier"
+      [formGroup]="editForm"
+      class="create"
+      novalidate
+      (ngSubmit)="saveEdit()"
+    >
+      <div class="form-header">
+        <div>
+          <p class="eyebrow">Uredi dobavljača</p>
+          <h3>{{ editingSupplier?.name }}</h3>
+        </div>
+        <button type="button" class="ghost" (click)="cancelEdit()">Zatvori</button>
+      </div>
+
+      <div class="field-pair">
+        <label>
+          Naziv dobavljača
+          <input type="text" formControlName="name" placeholder="Novi partner" required />
+        </label>
+        <label>
+          Kategorija
+          <input type="text" formControlName="category" placeholder="prehrana, kozmetika..." required />
+        </label>
+      </div>
+
+      <div class="field-grid">
+        <label>
+          Aktivni ugovori
+          <input type="number" min="0" formControlName="activeContracts" />
+        </label>
+        <label>
+          Aktivni objekti
+          <input type="number" min="0" formControlName="activeStores" />
+        </label>
+        <label>
+          Aktivne pozicije
+          <input type="number" min="0" formControlName="activePositions" />
+        </label>
+        <label>
+          Prihod (EUR)
+          <input type="number" min="0" formControlName="activeRevenue" />
+        </label>
+        <label>
+          Sljedeći isteka
+          <input type="date" formControlName="nextExpiry" />
+        </label>
+      </div>
+
+      <div class="actions">
+        <button type="submit">Sačuvaj izmjene</button>
+      </div>
+    </form>
   </div>
 </section>
 
@@ -72,6 +129,7 @@
       <div>Ugovori</div>
       <div>Aktivni prihod</div>
       <div>Sljedeći isteka</div>
+      <div>Akcije</div>
     </div>
     <div class="table__row" *ngFor="let supplier of suppliers">
       <div>
@@ -86,6 +144,9 @@
       <div>
         <span class="badge warning" *ngIf="supplier.nextExpiry as expiry">{{ expiry | date: 'dd.MM.yyyy' }}</span>
         <span class="muted" *ngIf="!supplier.nextExpiry">nema</span>
+      </div>
+      <div>
+        <button type="button" class="ghost" (click)="startEdit(supplier)">Uredi</button>
       </div>
     </div>
   </div>
