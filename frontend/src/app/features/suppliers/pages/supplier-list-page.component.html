@@ -15,6 +15,30 @@
           Kategorija
           <input type="text" formControlName="category" placeholder="prehrana, kozmetika..." />
         </label>
+        <label>
+          Dobavljači
+          <select multiple formControlName="selectedSuppliers" size="3">
+            <option *ngFor="let supplier of allSuppliers$ | async" [value]="supplier.id">
+              {{ supplier.name }}
+            </option>
+          </select>
+        </label>
+        <label>
+          Istek od
+          <input type="date" formControlName="expiryFrom" />
+        </label>
+        <label>
+          Istek do
+          <input type="date" formControlName="expiryTo" />
+        </label>
+        <label>
+          Minimalni prihod
+          <input type="number" min="0" formControlName="minRevenue" />
+        </label>
+        <label>
+          Maksimalni prihod
+          <input type="number" min="0" formControlName="maxRevenue" />
+        </label>
       </form>
       <button type="button" class="secondary" (click)="exportReport()">Izvezi XLSX</button>
     </div>
