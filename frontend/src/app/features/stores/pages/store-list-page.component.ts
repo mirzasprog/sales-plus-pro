@@ -1,7 +1,7 @@
 import { ChangeDetectionStrategy, Component, OnInit } from '@angular/core';
 import { FormBuilder, Validators } from '@angular/forms';
 import { combineLatest, Observable } from 'rxjs';
-import { map, startWith, switchMap, take } from 'rxjs/operators';
+import { map, shareReplay, startWith, switchMap, take } from 'rxjs/operators';
 import { StoreService } from '../../../core/services/store.service';
 import { NotificationService } from '../../../core/services/notification.service';
 import { ReportExportService } from '../../../core/services/report-export.service';
@@ -64,21 +64,24 @@ export class StoreListPageComponent implements OnInit {
   ngOnInit(): void {
     const filters$ = this.filterForm.valueChanges.pipe(startWith(this.filterForm.value));
 
-    this.stores$ = filters$.pipe(
-      switchMap((filters) =>
-        this.storeService.getAll().pipe(
-          map((stores) =>
-            stores.filter((store) =>
-              [store.name, store.code, store.city]
-                .join(' ')
-                .toLowerCase()
-                .includes((filters.search ?? '').toLowerCase()) &&
-              (filters.city ? store.city.toLowerCase().includes(filters.city.toLowerCase()) : true)
+    this.stores$ = filters$
+      .pipe(
+        switchMap((filters) =>
+          this.storeService.getAll().pipe(
+            map((stores) =>
+              stores.filter((store) =>
+                [store.name, store.code, store.city]
+                  .join(' ')
+                  .toLowerCase()
+                  .includes((filters.search ?? '').toLowerCase()) &&
+                (filters.city ? store.city.toLowerCase().includes(filters.city.toLowerCase()) : true)
+              )
             )
           )
-        )
-      )
-    );
+        ),
+        // cache the filtered result for reuse in exports
+        shareReplay(1)
+      );
 
     this.summary$ = this.stores$.pipe(
       map((stores) => {
