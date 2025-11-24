@@ -1,6 +1,6 @@
 import { ChangeDetectionStrategy, Component, OnInit } from '@angular/core';
 import { FormBuilder, FormGroup } from '@angular/forms';
-import { BehaviorSubject, combineLatest, map, Observable, shareReplay, startWith } from 'rxjs';
+import { BehaviorSubject, combineLatest, map, Observable, shareReplay, startWith, switchMap } from 'rxjs';
 import { PositionService } from '../../../core/services/position.service';
 import { SupplierService } from '../../../core/services/supplier.service';
 import { StoreService } from '../../../core/services/store.service';
@@ -10,17 +10,8 @@ import { Supplier } from '../../../shared/models/supplier.model';
 import { Store } from '../../../shared/models/store.model';
 import { Position } from '../../../shared/models/position.model';
 import { Contract } from '../../../shared/models/contract.model';
-
-interface DashboardSummary {
-  totalPositions: number;
-  available: number;
-  occupied: number;
-  reserved: number;
-  expiringSoon: number;
-  inactive: number;
-  expiringContracts: number;
-  coverage: number;
-}
+import { AnalyticsService } from '../../../core/services/analytics.service';
+import { DashboardSummary, ExpiringContract } from '../../../shared/models/dashboard-summary.model';
 
 interface DashboardFiltersForm {
   region: string | null;
@@ -56,7 +47,7 @@ interface StoreCoverage {
 })
 export class DashboardPageComponent implements OnInit {
   summary$!: Observable<DashboardSummary>;
-  expiringContracts$!: Observable<{ supplier: string; endDate: string; value: number }[]>;
+  expiringContracts$!: Observable<ExpiringContract[]>;
   topSuppliers$!: Observable<Supplier[]>;
   storeCoverage$!: Observable<StoreCoverage[]>;
   trend$!: Observable<DashboardTrendPoint[]>;
@@ -80,7 +71,8 @@ export class DashboardPageComponent implements OnInit {
     private readonly positionService: PositionService,
     private readonly supplierService: SupplierService,
     private readonly storeService: StoreService,
-    private readonly contractService: ContractService
+    private readonly contractService: ContractService,
+    private readonly analyticsService: AnalyticsService
   ) {}
 
   ngOnInit(): void {
@@ -95,10 +87,36 @@ export class DashboardPageComponent implements OnInit {
       .pipe(startWith(this.filtersForm.value as DashboardFiltersForm))
       .subscribe((value) => this.filters$.next(value));
 
-    const positions$ = this.positionService.getAll();
-    const contracts$ = this.contractService.getAll();
-    const suppliers$ = this.supplierService.getAll();
-    const stores$ = this.storeService.getAll();
+    const filterParams$ = this.filters$.pipe(map((filters) => this.buildFilterParams(filters)));
+
+    const stores$ = filterParams$.pipe(switchMap((params) => this.storeService.getAll(params)));
+    const suppliers$ = filterParams$.pipe(switchMap((params) => this.supplierService.getAll(params)));
+    const positions$ = combineLatest([this.positionService.getAll(), stores$, this.filters$]).pipe(
+      map(([positions, stores, filters]) => {
+        const storeLookup = new Map(stores.map((store) => [store.id, store]));
+        return positions
+          .map((position) => ({
+            ...position,
+            retailObjectName: storeLookup.get(position.retailObjectId)?.name ?? position.retailObjectName
+          }))
+          .filter((position) => this.positionMatchesFilters(position, storeLookup, filters));
+      }),
+      shareReplay(1)
+    );
+    const contracts$ = combineLatest([this.contractService.getAll(), positions$, stores$, this.filters$]).pipe(
+      map(([contracts, positions, stores, filters]) => {
+        const storeLookup = new Map(stores.map((store) => [store.id, store]));
+        return contracts.filter((contract) => {
+          const position = positions.find((item) => item.id === contract.positionId);
+          const store = position ? storeLookup.get(position.retailObjectId) : undefined;
+          const matchesRegion = filters.region ? store?.city === filters.region : true;
+          const matchesStore = filters.store ? position?.retailObjectId === filters.store : true;
+          const matchesSupplier = filters.supplier ? contract.supplierId === filters.supplier : true;
+          return matchesRegion && matchesStore && matchesSupplier;
+        });
+      }),
+      shareReplay(1)
+    );
 
     this.filterOptions$ = combineLatest([positions$, suppliers$, stores$]).pipe(
       map(([positions, suppliers, stores]) => ({
@@ -109,124 +127,44 @@ export class DashboardPageComponent implements OnInit {
       }))
     );
 
-    const dashboardState$ = combineLatest([positions$, contracts$, stores$, suppliers$, this.filters$]).pipe(
-      map(([positions, contracts, stores, suppliers, filters]) => {
-        const storeLookup = new Map(stores.map((store) => [store.id, store]));
-        const supplierLookup = new Map(suppliers.map((supplier) => [supplier.id, supplier]));
+    this.summary$ = filterParams$.pipe(switchMap((params) => this.analyticsService.getSummary(params)));
 
-        const normalizedPositions = positions.map((position) => {
-          const store = storeLookup.get(position.retailObjectId);
-          const supplier = position.supplierId ? supplierLookup.get(position.supplierId) : undefined;
-          return {
-            ...position,
-            retailObjectName: store?.name ?? position.retailObjectName,
-            supplier: supplier?.name ?? position.supplier
-          } as Position;
-        });
+    this.expiringContracts$ = this.summary$.pipe(map((summary) => summary.expiringContractsList));
 
-        const positionMatchesFilters = (position: Position): boolean => {
-          const store = storeLookup.get(position.retailObjectId);
-          const matchesRegion = filters.region ? store?.city === filters.region : true;
-          const matchesStore = filters.store ? position.retailObjectId === filters.store : true;
-          const matchesSupplier = filters.supplier ? position.supplierId === filters.supplier : true;
-          const matchesType = filters.positionType ? position.positionType === filters.positionType : true;
-          return matchesRegion && matchesStore && matchesSupplier && matchesType;
-        };
+    this.topSuppliers$ = this.summary$.pipe(map((summary) => summary.topSuppliers));
 
-        const filteredPositions = normalizedPositions.filter(positionMatchesFilters);
-
-        const filteredContracts = contracts.filter((contract) => {
-          const contractPosition = normalizedPositions.find((p) => p.id === contract.positionId);
-          const contractStore = storeLookup.get(contract.storeId);
-          const matchesRegion = filters.region ? contractStore?.city === filters.region : true;
-          const matchesStore = filters.store ? contract.storeId === filters.store : true;
-          const matchesSupplier = filters.supplier ? contract.supplierId === filters.supplier : true;
-          const matchesPosition = contractPosition ? positionMatchesFilters(contractPosition) : true;
-          return matchesRegion && matchesStore && matchesSupplier && matchesPosition;
-        });
-
-        const filteredStores = stores.filter((store) => {
-          const matchesRegion = filters.region ? store.city === filters.region : true;
-          const matchesStore = filters.store ? store.id === filters.store : true;
-          return matchesRegion && matchesStore;
-        });
-
-        const storeCoverage = this.buildStoreCoverage(filteredPositions, storeLookup);
-
-        return {
-          filters,
-          positions: filteredPositions,
-          contracts: filteredContracts,
-          stores: filteredStores,
-          suppliers,
-          storeCoverage
-        };
-      }),
-      shareReplay(1)
-    );
-
-    this.summary$ = dashboardState$.pipe(
-      map(({ positions, contracts }) => {
-        const totalPositions = positions.length;
-        const statusCount = (status: PositionStatus) => positions.filter((p) => p.status === status).length;
-        const expiringContracts = contracts.filter((contract) => this.isExpiringSoon(contract.endDate, 30)).length;
-        const occupied = statusCount('Occupied');
-        const coverage = totalPositions ? Math.round((occupied / totalPositions) * 100) : 0;
-
-        return {
-          totalPositions,
-          available: statusCount('Available'),
-          occupied,
-          reserved: statusCount('Reserved'),
-          expiringSoon: statusCount('ExpiringSoon'),
-          inactive: statusCount('Inactive'),
-          expiringContracts,
-          coverage
-        };
-      })
-    );
-
-    this.expiringContracts$ = dashboardState$.pipe(
-      map(({ contracts, suppliers }) =>
-        contracts
-          .filter((contract) => this.isExpiringSoon(contract.endDate, 45))
-          .map((contract) => ({
-            supplier: suppliers.find((supplier) => supplier.id === contract.supplierId)?.name ?? contract.supplierId,
-            endDate: contract.endDate,
-            value: contract.value
+    this.storeCoverage$ = stores$.pipe(
+      map((storeMetrics) =>
+        storeMetrics
+          .map((store) => ({
+            id: store.id,
+            name: store.name,
+            city: store.city,
+            occupancy: store.totalPositions ? Math.round((store.occupied / store.totalPositions) * 100) : 0
           }))
+          .slice(0, 4)
       )
     );
 
-    this.topSuppliers$ = dashboardState$.pipe(
-      map(({ suppliers, contracts, positions, filters }) => {
-        const supplierIds = filters.supplier ? [filters.supplier] : suppliers.map((s) => s.id);
-        const supplierTotals = supplierIds.map((id) => {
-          const supplier = suppliers.find((s) => s.id === id)!;
-          const supplierContracts = contracts.filter((contract) => contract.supplierId === id);
-          const revenue = supplierContracts.reduce((total, contract) => total + contract.value, 0);
-          const activePositions = positions.filter((position) => position.supplierId === id).length;
-          const activeStores = new Set(
-            positions.filter((position) => position.supplierId === id).map((position) => position.retailObjectId)
-          ).size;
-          return {
-            ...supplier,
-            activeRevenue: revenue,
-            activePositions,
-            activeContracts: supplierContracts.length,
-            activeStores
-          };
-        });
+    this.trend$ = combineLatest([positions$, contracts$]).pipe(map(([positions, contracts]) => this.buildTrends(positions, contracts)));
+  }
 
-        return [...supplierTotals].sort((a, b) => b.activeRevenue - a.activeRevenue).slice(0, 5);
-      })
-    );
+  private buildFilterParams(filters: DashboardFilters): Record<string, string> {
+    return {
+      region: filters.region ?? '',
+      storeId: filters.store ?? '',
+      supplierId: filters.supplier ?? '',
+      positionType: filters.positionType ?? ''
+    };
+  }
 
-    this.storeCoverage$ = dashboardState$.pipe(
-      map(({ storeCoverage }) => storeCoverage.slice(0, 4))
-    );
-
-    this.trend$ = dashboardState$.pipe(map((state) => this.buildTrends(state.positions, state.contracts)));
+  private positionMatchesFilters(position: Position, storeLookup: Map<string, Store>, filters: DashboardFilters): boolean {
+    const store = storeLookup.get(position.retailObjectId);
+    const matchesRegion = filters.region ? store?.city === filters.region : true;
+    const matchesStore = filters.store ? position.retailObjectId === filters.store : true;
+    const matchesSupplier = filters.supplier ? position.supplierId === filters.supplier : true;
+    const matchesType = filters.positionType ? position.positionType === filters.positionType : true;
+    return matchesRegion && matchesStore && matchesSupplier && matchesType;
   }
 
   private isExpiringSoon(date: string, thresholdDays: number): boolean {

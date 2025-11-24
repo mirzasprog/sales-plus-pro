@@ -16,4 +16,6 @@ public record AdditionalPositionDto(
     PositionStatus Status,
     int ActiveLeases,
     DateTime? LeaseStart,
-    DateTime? LeaseEnd);
+    DateTime? LeaseEnd,
+    Guid? SupplierId,
+    string? SupplierName);

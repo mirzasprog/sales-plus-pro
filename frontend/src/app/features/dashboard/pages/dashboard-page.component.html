@@ -39,13 +39,13 @@
 
   <div class="kpi-grid">
     <app-kpi-card label="Ukupno pozicija" [value]="summary.totalPositions" routerLink="/positions"></app-kpi-card>
-    <app-kpi-card label="Slobodno" [value]="summary.available" accent="success" routerLink="/positions"></app-kpi-card>
-    <app-kpi-card label="Zauzeto" [value]="summary.occupied" accent="danger" routerLink="/positions"></app-kpi-card>
-    <app-kpi-card label="Rezervirano" [value]="summary.reserved" accent="warning" routerLink="/positions"></app-kpi-card>
-    <app-kpi-card label="Ističe uskoro" [value]="summary.expiringSoon" accent="warning" routerLink="/positions"></app-kpi-card>
-    <app-kpi-card label="Neaktivno" [value]="summary.inactive" routerLink="/positions"></app-kpi-card>
+    <app-kpi-card label="Slobodno" [value]="summary.availablePositions" accent="success" routerLink="/positions"></app-kpi-card>
+    <app-kpi-card label="Zauzeto" [value]="summary.occupiedPositions" accent="danger" routerLink="/positions"></app-kpi-card>
+    <app-kpi-card label="Rezervirano" [value]="summary.reservedPositions" accent="warning" routerLink="/positions"></app-kpi-card>
+    <app-kpi-card label="Ističe uskoro" [value]="summary.expiringSoonPositions" accent="warning" routerLink="/positions"></app-kpi-card>
+    <app-kpi-card label="Neaktivno" [value]="summary.inactivePositions" routerLink="/positions"></app-kpi-card>
     <app-kpi-card label="Ugovori koji ističu" [value]="summary.expiringContracts" routerLink="/suppliers"></app-kpi-card>
-    <app-kpi-card label="Pokrivenost objekata" [value]="summary.coverage + '%'" accent="success" routerLink="/stores"></app-kpi-card>
+    <app-kpi-card label="Pokrivenost objekata" [value]="summary.coveragePercent + '%'" accent="success" routerLink="/stores"></app-kpi-card>
   </div>
 
   <div class="dashboard__grid">
@@ -54,11 +54,11 @@
       <ngx-charts-pie-chart
         *ngIf="summary$ | async as s"
         [results]="[
-          { name: 'Slobodno', value: s.available },
-          { name: 'Zauzeto', value: s.occupied },
-          { name: 'Rezervirano', value: s.reserved },
-          { name: 'Ističe', value: s.expiringSoon },
-          { name: 'Neaktivno', value: s.inactive }
+          { name: 'Slobodno', value: s.availablePositions },
+          { name: 'Zauzeto', value: s.occupiedPositions },
+          { name: 'Rezervirano', value: s.reservedPositions },
+          { name: 'Ističe', value: s.expiringSoonPositions },
+          { name: 'Neaktivno', value: s.inactivePositions }
         ]"
         [legend]="true"
         [animations]="true"

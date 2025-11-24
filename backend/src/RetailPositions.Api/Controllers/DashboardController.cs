@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using RetailPositions.Application.DTOs;
 using RetailPositions.Application.Services;
 
 namespace RetailPositions.Api.Controllers;
@@ -22,22 +23,22 @@ public class DashboardController : BaseApiController
     /// </summary>
     [HttpGet("summary")]
     [ProducesResponseType(StatusCodes.Status200OK)]
-    public async Task<IActionResult> GetSummaryAsync(CancellationToken cancellationToken)
-        => Ok(await _service.GetGlobalSummaryAsync(cancellationToken));
+    public async Task<IActionResult> GetSummaryAsync([FromQuery] DashboardFilterDto? filter, CancellationToken cancellationToken)
+        => Ok(await _service.GetGlobalSummaryAsync(filter, cancellationToken));
 
     /// <summary>
     /// Returns occupancy, revenue and expiring contract KPIs per store.
     /// </summary>
     [HttpGet("stores")]
     [ProducesResponseType(StatusCodes.Status200OK)]
-    public async Task<IActionResult> GetStoreMetricsAsync([FromQuery] int expiringInDays = 30, CancellationToken cancellationToken = default)
-        => Ok(await _service.GetStoreMetricsAsync(expiringInDays, cancellationToken));
+    public async Task<IActionResult> GetStoreMetricsAsync([FromQuery] int expiringInDays = 30, [FromQuery] DashboardFilterDto? filter = null, CancellationToken cancellationToken = default)
+        => Ok(await _service.GetStoreMetricsAsync(expiringInDays, filter, cancellationToken));
 
     /// <summary>
     /// Returns active contract metrics grouped by supplier.
     /// </summary>
     [HttpGet("suppliers")]
     [ProducesResponseType(StatusCodes.Status200OK)]
-    public async Task<IActionResult> GetSupplierMetricsAsync(CancellationToken cancellationToken)
-        => Ok(await _service.GetSupplierMetricsAsync(cancellationToken));
+    public async Task<IActionResult> GetSupplierMetricsAsync([FromQuery] DashboardFilterDto? filter, CancellationToken cancellationToken)
+        => Ok(await _service.GetSupplierMetricsAsync(filter, cancellationToken));
 }

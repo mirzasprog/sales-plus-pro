@@ -22,9 +22,10 @@ public static class MappingExtensions
 
     public static AdditionalPositionDto ToDto(this AdditionalPosition entity)
     {
+        var now = DateTime.UtcNow;
         var activeLease = entity.Leases
             .OrderByDescending(l => l.StartDate)
-            .FirstOrDefault(l => l.EndDate >= DateTime.UtcNow);
+            .FirstOrDefault(l => l.StartDate <= now && l.EndDate >= now);
 
         return new AdditionalPositionDto(
             entity.Id,
@@ -35,9 +36,11 @@ public static class MappingExtensions
             entity.Width,
             entity.Height,
             entity.Status,
-            entity.Leases.Count(l => l.EndDate >= DateTime.UtcNow),
+            entity.Leases.Count(l => l.StartDate <= now && l.EndDate >= now),
             activeLease?.StartDate,
-            activeLease?.EndDate);
+            activeLease?.EndDate,
+            activeLease?.BrandId,
+            activeLease?.Brand?.Name);
     }
 
     public static BrandDto ToDto(this Brand entity)
