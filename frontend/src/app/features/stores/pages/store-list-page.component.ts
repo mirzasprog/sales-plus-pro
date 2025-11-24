@@ -1,6 +1,6 @@
 import { ChangeDetectionStrategy, Component, OnInit } from '@angular/core';
 import { FormBuilder, Validators } from '@angular/forms';
-import { Observable } from 'rxjs';
+import { combineLatest, Observable } from 'rxjs';
 import { map, startWith, switchMap, take } from 'rxjs/operators';
 import { StoreService } from '../../../core/services/store.service';
 import { NotificationService } from '../../../core/services/notification.service';
@@ -209,32 +209,33 @@ export class StoreListPageComponent implements OnInit {
   }
 
   exportReport(): void {
-    this.stores$.pipe(take(1)).subscribe((stores) => {
-      const filters = this.filterForm.value;
-      this.reportExport.exportToXlsx({
-        data: stores,
-        fileName: 'objekti-izvjestaj',
-        worksheetName: 'Objekti',
-        criteria: {
-          Pretraga: filters.search || undefined,
-          Grad: filters.city || undefined,
-          'Ističe u (dana)': filters.expiringInDays || undefined
-        },
-        mapRow: (store) => ({
-          Šifra: store.code,
-          Naziv: store.name,
-          Adresa: `${store.street}, ${store.city}`,
-          'Pozicije ukupno': store.totalPositions,
-          Zauzeto: store.occupied,
-          Slobodno: store.available,
-          Rezervisano: store.reserved,
-          Neaktivno: store.inactive,
-          'Ističe ugovora': store.expiringContracts,
-          Prihod: store.activeRevenue,
-          'Broj nacrta': store.layoutCount
-        })
+    combineLatest([this.stores$, this.filterForm.valueChanges.pipe(startWith(this.filterForm.value))])
+      .pipe(take(1))
+      .subscribe(([stores, filters]) => {
+        this.reportExport.exportToXlsx({
+          data: stores,
+          fileName: 'objekti-izvjestaj',
+          worksheetName: 'Objekti',
+          criteria: {
+            Pretraga: filters.search || undefined,
+            Grad: filters.city || undefined,
+            'Ističe u (dana)': filters.expiringInDays || undefined
+          },
+          mapRow: (store) => ({
+            Šifra: store.code,
+            Naziv: store.name,
+            Adresa: `${store.street}, ${store.city}`,
+            'Pozicije ukupno': store.totalPositions,
+            Zauzeto: store.occupied,
+            Slobodno: store.available,
+            Rezervisano: store.reserved,
+            Neaktivno: store.inactive,
+            'Ističe ugovora': store.expiringContracts,
+            Prihod: store.activeRevenue,
+            'Broj nacrta': store.layoutCount
+          })
+        });
+        this.notifications.push({ message: 'XLSX izvještaj za objekte generisan', type: 'success' });
       });
-      this.notifications.push({ message: 'XLSX izvještaj za objekte generisan', type: 'success' });
-    });
   }
 }
