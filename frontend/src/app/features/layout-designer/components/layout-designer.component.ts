@@ -5,11 +5,10 @@ import {
   ElementRef,
   OnDestroy,
   OnInit,
-  Subscription,
   ViewChild
 } from '@angular/core';
 import { FormBuilder, Validators } from '@angular/forms';
-import { debounceTime, filter, map, Subject, takeUntil, tap, withLatestFrom } from 'rxjs';
+import { Subscription, debounceTime, filter, map, Subject, takeUntil, tap, withLatestFrom } from 'rxjs';
 import { v4 as uuidv4 } from 'uuid';
 import Konva, { KonvaEventObject, Node as KonvaNode, Stage, Layer, Rect, Transformer } from 'konva';
 import { LayoutService } from '../../../core/services/layout.service';
