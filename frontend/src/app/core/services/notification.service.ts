@@ -3,7 +3,7 @@ import { concat, map, Observable, of, Subject, switchMap, timer } from 'rxjs';
 
 export interface Notification {
   message: string;
-  type: 'success' | 'error' | 'info';
+  type: 'success' | 'error' | 'info' | 'warning';
 }
 
 @Injectable()
