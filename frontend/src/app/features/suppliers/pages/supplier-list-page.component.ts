@@ -1,7 +1,7 @@
 import { ChangeDetectionStrategy, Component, OnInit } from '@angular/core';
 import { FormBuilder, Validators } from '@angular/forms';
 import { Observable, combineLatest } from 'rxjs';
-import { map, startWith, take } from 'rxjs/operators';
+import { map, shareReplay, startWith, take } from 'rxjs/operators';
 import { SupplierService } from '../../../core/services/supplier.service';
 import { NotificationService } from '../../../core/services/notification.service';
 import { ReportExportService } from '../../../core/services/report-export.service';
@@ -92,7 +92,8 @@ export class SupplierListPageComponent implements OnInit {
             matchMaxRevenue
           );
         })
-      )
+      ),
+      shareReplay(1)
     );
   }
 
