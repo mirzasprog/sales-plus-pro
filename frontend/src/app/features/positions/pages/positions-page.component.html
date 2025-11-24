@@ -7,8 +7,14 @@
           <option value="">Status</option>
           <option *ngFor="let status of statusOptions" [value]="status">{{ status }}</option>
         </select>
-        <input type="text" placeholder="Dobavljač" formControlName="supplier" />
-        <input type="text" placeholder="Tip elementa" formControlName="type" />
+        <select formControlName="supplier">
+          <option value="">Dobavljač</option>
+          <option *ngFor="let supplier of suppliers$ | async" [value]="supplier.id">{{ supplier.name }}</option>
+        </select>
+        <select formControlName="type">
+          <option value="">Tip elementa</option>
+          <option *ngFor="let type of positionTypes$ | async" [value]="type">{{ type }}</option>
+        </select>
       </form>
       <button type="button" class="secondary" (click)="exportReport()">Izvezi XLSX</button>
     </div>
@@ -21,7 +27,10 @@
         </label>
         <label>
           Objekat
-          <input type="text" formControlName="retailObjectName" placeholder="Shopping centar" required />
+          <select formControlName="retailObjectId" required>
+            <option value="" disabled>Odaberi objekat</option>
+            <option *ngFor="let store of stores$ | async" [value]="store.id">{{ store.name }}</option>
+          </select>
         </label>
         <label>
           Tip pozicije
@@ -35,7 +44,10 @@
         </label>
         <label>
           Dobavljač
-          <input type="text" formControlName="supplier" placeholder="(opcionalno)" />
+          <select formControlName="supplierId">
+            <option value="">(opcionalno)</option>
+            <option *ngFor="let supplier of suppliers$ | async" [value]="supplier.id">{{ supplier.name }}</option>
+          </select>
         </label>
         <label>
           Širina (cm)
@@ -76,7 +88,10 @@
         </label>
         <label>
           Objekat
-          <input type="text" formControlName="retailObjectName" placeholder="Shopping centar" required />
+          <select formControlName="retailObjectId" required>
+            <option value="" disabled>Odaberi objekat</option>
+            <option *ngFor="let store of stores$ | async" [value]="store.id">{{ store.name }}</option>
+          </select>
         </label>
         <label>
           Tip pozicije
@@ -90,7 +105,10 @@
         </label>
         <label>
           Dobavljač
-          <input type="text" formControlName="supplier" placeholder="(opcionalno)" />
+          <select formControlName="supplierId">
+            <option value="">(opcionalno)</option>
+            <option *ngFor="let supplier of suppliers$ | async" [value]="supplier.id">{{ supplier.name }}</option>
+          </select>
         </label>
         <label>
           Širina (cm)

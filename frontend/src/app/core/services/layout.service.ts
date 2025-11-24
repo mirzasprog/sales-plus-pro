@@ -1,8 +1,9 @@
 import { Injectable } from '@angular/core';
-import { BehaviorSubject, combineLatest, map, Observable, of, tap } from 'rxjs';
+import { BehaviorSubject, combineLatest, map, Observable, of, switchMap, tap } from 'rxjs';
 import { v4 as uuidv4 } from 'uuid';
 import { DesignerElement, LayoutDefinition } from '../../features/layout-designer/models/designer-element';
 import { LocalStoreLayoutService } from './local-store-layout.service';
+import { PositionStatus } from '../../shared/models/position-status';
 
 @Injectable({ providedIn: 'root' })
 export class LayoutService {
@@ -144,6 +145,73 @@ export class LayoutService {
     this.commit(elements);
   }
 
+  syncPositionOnLayout(position: {
+    id: string;
+    name: string;
+    positionType: string;
+    status: PositionStatus;
+    widthCm: number;
+    heightCm: number;
+    supplier?: string;
+    note?: string;
+    retailObjectId: string;
+    retailObjectName?: string;
+  }): Observable<LayoutDefinition | null> {
+    if (!position.retailObjectId) {
+      return of(null);
+    }
+
+    const normalizedType = this.normalizeType(position.positionType);
+    const now = new Date().toISOString();
+
+    return this.store
+      .getLayoutByObjectId(position.retailObjectId)
+      .pipe(
+        switchMap((layout) => {
+          const baseLayout: LayoutDefinition =
+            layout ??
+            this.createLayoutDefinition(
+              position.retailObjectId,
+              position.retailObjectName ?? `${position.retailObjectId} - nacrt`
+            );
+
+          const existingIndex = baseLayout.elements.findIndex((element) => element.id === position.id);
+          const fallbackPosition = this.defaultPosition(baseLayout.elements.length);
+          const element = {
+            id: position.id,
+            label: position.name,
+            type: normalizedType,
+            status: position.status,
+            width: position.widthCm,
+            height: position.heightCm,
+            x: existingIndex >= 0 ? baseLayout.elements[existingIndex].x : fallbackPosition.x,
+            y: existingIndex >= 0 ? baseLayout.elements[existingIndex].y : fallbackPosition.y,
+            rotation: existingIndex >= 0 ? baseLayout.elements[existingIndex].rotation : 0,
+            supplier: position.supplier,
+            note: position.note,
+            updatedAt: now
+          };
+
+          const elements = existingIndex >= 0
+            ? baseLayout.elements.map((item, index) => (index === existingIndex ? element : item))
+            : [...baseLayout.elements, element];
+
+          const updatedLayout: LayoutDefinition = {
+            ...baseLayout,
+            elements,
+            updatedAt: now
+          };
+
+          return this.store.saveLayout(updatedLayout);
+        }),
+        tap((layout) => {
+          if (layout && this.activeLayout$.value?.id === layout.id) {
+            this.applyLayout(layout);
+          }
+        })
+      );
+  }
+
   setBoundary(width: number, height: number): void {
     const layout = this.activeLayout$.value;
     if (!layout) {
@@ -176,5 +244,39 @@ export class LayoutService {
 
   private clone(elements: DesignerElement[]): DesignerElement[] {
     return elements.map((el) => ({ ...el }));
+  }
+
+  private createLayoutDefinition(objectId: string, name: string): LayoutDefinition {
+    return {
+      id: uuidv4(),
+      name,
+      objectId,
+      boundaryWidth: 1200,
+      boundaryHeight: 800,
+      elements: [],
+      updatedAt: new Date().toISOString()
+    };
+  }
+
+  private normalizeType(type: string): DesignerElement['type'] {
+    const allowed: DesignerElement['type'][] = [
+      'Gondola',
+      'Promo',
+      'Stand',
+      'Cash Register',
+      'Entrance',
+      'Display Case',
+      'Shelf',
+      'Door',
+      'Window',
+      'Wall',
+      'Counter'
+    ];
+    return (allowed.find((item) => item.toLowerCase() === type.toLowerCase()) ?? 'Stand') as DesignerElement['type'];
+  }
+
+  private defaultPosition(index: number): { x: number; y: number } {
+    const spacing = 40;
+    return { x: 60 + (index % 5) * spacing, y: 60 + Math.floor(index / 5) * spacing };
   }
 }
