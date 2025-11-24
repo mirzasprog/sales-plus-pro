@@ -5,6 +5,15 @@
       <h1>2D nacrt objekta</h1>
       <p class="subtitle">Crtaj, pomiči i rotiraj elemente kao u AutoCAD-u – sa snap mrežom, undo/redo i preciznim dimenzijama.</p>
     </div>
+    <div class="toolbar__context">
+      <label>
+        <span>Objekat</span>
+        <select [ngModel]="selectedStoreId" (ngModelChange)="selectStore($event)">
+          <option *ngFor="let store of stores" [value]="store.id">{{ store.name }}</option>
+        </select>
+      </label>
+      <button type="button" class="ghost" (click)="createLayoutForSelectedStore()" [disabled]="!selectedStoreId">Kreiraj nacrt</button>
+    </div>
     <div class="toolbar__actions">
       <label class="toggle">
         <input type="checkbox" [checked]="snapToGrid" (change)="toggleSnap()" />
@@ -67,6 +76,12 @@
 
       <div class="canvas__surface" #stageHost (dragover)="handleCanvasDragOver($event)" (drop)="handleCanvasDrop($event)">
         <div class="grid-overlay"></div>
+        <div class="canvas__empty" *ngIf="layoutMissing">
+          <div>
+            <p>Za odabrani objekat još nema nacrta.</p>
+            <button type="button" (click)="createLayoutForSelectedStore()">Kreiraj nacrt</button>
+          </div>
+        </div>
       </div>
 
       <div *ngIf="contextMenu.visible" class="context-menu" [style.top.px]="contextMenu.y" [style.left.px]="contextMenu.x">

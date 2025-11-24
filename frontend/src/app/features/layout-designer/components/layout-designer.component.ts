@@ -5,6 +5,7 @@ import {
   ElementRef,
   OnDestroy,
   OnInit,
+  Subscription,
   ViewChild
 } from '@angular/core';
 import { FormBuilder, Validators } from '@angular/forms';
@@ -14,6 +15,8 @@ import Konva, { KonvaEventObject, Node as KonvaNode, Stage, Layer, Rect, Transfo
 import { LayoutService } from '../../../core/services/layout.service';
 import { DesignerElement, DesignerElementType, LayoutDefinition } from '../models/designer-element';
 import { PositionStatus } from '../../../shared/models/position-status';
+import { StoreService } from '../../../core/services/store.service';
+import { Store } from '../../../shared/models/store.model';
 
 @Component({
   selector: 'app-layout-designer',
@@ -47,6 +50,9 @@ export class LayoutDesignerComponent implements OnInit, AfterViewInit, OnDestroy
   readonly gridSize = 20;
   snapToGrid = true;
   zoom = 1;
+  layoutMissing = false;
+  stores: Store[] = [];
+  selectedStoreId: string | null = null;
 
   // context menu (desni klik)
   contextMenu = { visible: false, x: 0, y: 0, targetId: '' };
@@ -64,6 +70,7 @@ export class LayoutDesignerComponent implements OnInit, AfterViewInit, OnDestroy
   private boundaryRect?: Rect;
   private transformer?: Transformer;
   private formPatching = false;
+  private layoutLoadSub?: Subscription;
   private readonly destroy$ = new Subject<void>();
 
   readonly typeStyles: Record<DesignerElementType, { icon: string; color: string; fill: string; label: string }> = {
@@ -113,7 +120,8 @@ export class LayoutDesignerComponent implements OnInit, AfterViewInit, OnDestroy
 
   constructor(
     private readonly layoutService: LayoutService,
-    private readonly fb: FormBuilder
+    private readonly fb: FormBuilder,
+    private readonly storeService: StoreService
   ) {}
 
   // ---------------------------------------------------------------------------
@@ -121,7 +129,15 @@ export class LayoutDesignerComponent implements OnInit, AfterViewInit, OnDestroy
   // ---------------------------------------------------------------------------
 
   ngOnInit(): void {
-    this.layoutService.loadDemoLayout();
+    this.storeService
+      .getAll()
+      .pipe(takeUntil(this.destroy$))
+      .subscribe((stores) => {
+        this.stores = stores;
+        if (!this.selectedStoreId && stores.length) {
+          this.selectStore(stores[0].id);
+        }
+      });
 
     // Sink selektovanog elementa u inspector form
     this.selectedElement$
@@ -197,6 +213,7 @@ export class LayoutDesignerComponent implements OnInit, AfterViewInit, OnDestroy
   }
 
   ngOnDestroy(): void {
+    this.layoutLoadSub?.unsubscribe();
     this.destroy$.next();
     this.destroy$.complete();
   }
@@ -302,7 +319,27 @@ export class LayoutDesignerComponent implements OnInit, AfterViewInit, OnDestroy
 
   resetToDemo(): void {
     this.layoutService.loadDemoLayout();
+    if (this.stores.length) {
+      this.selectedStoreId = this.stores[0].id;
+    }
+    this.layoutMissing = false;
     this.contextMenu.visible = false;
+    this.updateTransformerSelection();
+  }
+
+  selectStore(storeId: string): void {
+    this.selectedStoreId = storeId;
+    this.loadLayoutForSelectedStore();
+  }
+
+  createLayoutForSelectedStore(): void {
+    const store = this.stores.find((item) => item.id === this.selectedStoreId);
+    if (!store) {
+      return;
+    }
+
+    this.layoutService.startNewLayoutForObject(store.id, `${store.name} - nacrt`, 1200, 820);
+    this.layoutMissing = false;
     this.updateTransformerSelection();
   }
 
@@ -511,6 +548,24 @@ export class LayoutDesignerComponent implements OnInit, AfterViewInit, OnDestroy
     });
     this.elementLayer.add(this.boundaryRect);
     this.elementLayer.batchDraw();
+  }
+
+  private loadLayoutForSelectedStore(): void {
+    if (!this.selectedStoreId) {
+      return;
+    }
+
+    this.layoutLoadSub?.unsubscribe();
+    this.layoutLoadSub = this.layoutService
+      .loadLayoutForObject(this.selectedStoreId)
+      .pipe(takeUntil(this.destroy$))
+      .subscribe((layout) => {
+        this.layoutMissing = !layout;
+        if (!layout) {
+          this.layoutService.clearActiveLayout();
+        }
+        this.updateTransformerSelection();
+      });
   }
 
   // ---------------------------------------------------------------------------

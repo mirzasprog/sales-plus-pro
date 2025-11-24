@@ -10,6 +10,8 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
   padding: 16px 20px;
   background: linear-gradient(90deg, #0b1220, #0f172a);
   border: 1px solid #0f172a;
@@ -28,6 +30,28 @@
   display: flex;
   align-items: center;
   gap: 10px;
+}
+
+.toolbar__context {
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+
+  label {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    color: #e2e8f0;
+  }
+
+  select {
+    background: #0f172a;
+    border: 1px solid #1e293b;
+    padding: 8px 10px;
+    color: #e2e8f0;
+    border-radius: 8px;
+    min-width: 220px;
+  }
 }
 
 .designer__grid {
@@ -97,6 +121,20 @@
   border-radius: 10px;
   height: 620px;
   border: 1px dashed #1e293b;
+}
+
+.canvas__empty {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: rgba(11, 18, 32, 0.9);
+  text-align: center;
+  color: #cbd5e1;
+
+  button {
+    margin-top: 10px;
+  }
 }
 
 .canvas__surface #stageHost,
