@@ -105,11 +105,10 @@ export class DashboardPageComponent implements OnInit {
     const dashboardState$ = combineLatest([positions$, contracts$, stores$, suppliers$, this.filters$]).pipe(
       map(([positions, contracts, stores, suppliers, filters]) => {
         const positionMatchesFilters = (position: Position): boolean => {
-          const store = stores.find((s) => s.name === position.retailObjectName);
+          const store = stores.find((s) => s.id === position.retailObjectId);
           const matchesRegion = filters.region ? store?.city === filters.region : true;
-          const matchesStore = filters.store ? store?.id === filters.store : true;
-          const supplier = suppliers.find((s) => s.id === filters.supplier || s.name === filters.supplier);
-          const matchesSupplier = filters.supplier ? position.supplier === supplier?.name : true;
+          const matchesStore = filters.store ? position.retailObjectId === filters.store : true;
+          const matchesSupplier = filters.supplier ? position.supplierId === filters.supplier : true;
           const matchesType = filters.positionType ? position.positionType === filters.positionType : true;
           return matchesRegion && matchesStore && matchesSupplier && matchesType;
         };
