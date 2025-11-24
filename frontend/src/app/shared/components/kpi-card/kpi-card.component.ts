@@ -10,4 +10,13 @@ export class KpiCardComponent {
   @Input({ required: true }) label!: string;
   @Input({ required: true }) value!: number | string;
   @Input() accent: 'primary' | 'success' | 'warning' | 'danger' = 'primary';
+  @Input() routerLink?: string | any[];
+  @Input() action?: () => void;
+
+  handleClick(event: Event): void {
+    if (this.action && !this.routerLink) {
+      event.preventDefault();
+      this.action();
+    }
+  }
 }

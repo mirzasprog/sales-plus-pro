@@ -1,13 +1,51 @@
 <section class="dashboard" *ngIf="summary$ | async as summary">
+  <header class="dashboard__header" *ngIf="filterOptions$ | async as options">
+    <div>
+      <p class="eyebrow">Kontrolna ploča</p>
+      <h1>Pregled zauzetosti i prihoda</h1>
+      <p class="muted">Filtriraj KPI pokazatelje prema regiji, objektu ili partneru i uoči trendove kroz vrijeme.</p>
+    </div>
+    <form class="filters" [formGroup]="filtersForm">
+      <label class="filter">
+        <span>Regija</span>
+        <select formControlName="region">
+          <option [ngValue]="null">Sve regije</option>
+          <option *ngFor="let region of options.regions" [value]="region">{{ region }}</option>
+        </select>
+      </label>
+      <label class="filter">
+        <span>Objekt</span>
+        <select formControlName="store">
+          <option [ngValue]="null">Svi objekti</option>
+          <option *ngFor="let store of options.stores" [value]="store.id">{{ store.name }}</option>
+        </select>
+      </label>
+      <label class="filter">
+        <span>Dobavljač</span>
+        <select formControlName="supplier">
+          <option [ngValue]="null">Svi dobavljači</option>
+          <option *ngFor="let supplier of options.suppliers" [value]="supplier.id">{{ supplier.name }}</option>
+        </select>
+      </label>
+      <label class="filter">
+        <span>Pozicija</span>
+        <select formControlName="positionType">
+          <option [ngValue]="null">Sve pozicije</option>
+          <option *ngFor="let type of options.positionTypes" [value]="type">{{ type }}</option>
+        </select>
+      </label>
+    </form>
+  </header>
+
   <div class="kpi-grid">
-    <app-kpi-card label="Ukupno pozicija" [value]="summary.totalPositions"></app-kpi-card>
-    <app-kpi-card label="Slobodno" [value]="summary.available" accent="success"></app-kpi-card>
-    <app-kpi-card label="Zauzeto" [value]="summary.occupied" accent="danger"></app-kpi-card>
-    <app-kpi-card label="Rezervirano" [value]="summary.reserved" accent="warning"></app-kpi-card>
-    <app-kpi-card label="Ističe uskoro" [value]="summary.expiringSoon" accent="warning"></app-kpi-card>
-    <app-kpi-card label="Neaktivno" [value]="summary.inactive"></app-kpi-card>
-    <app-kpi-card label="Ugovori koji ističu" [value]="summary.expiringContracts"></app-kpi-card>
-    <app-kpi-card label="Pokrivenost objekata" [value]="summary.coverage + '%'" accent="success"></app-kpi-card>
+    <app-kpi-card label="Ukupno pozicija" [value]="summary.totalPositions" routerLink="/positions"></app-kpi-card>
+    <app-kpi-card label="Slobodno" [value]="summary.available" accent="success" routerLink="/positions"></app-kpi-card>
+    <app-kpi-card label="Zauzeto" [value]="summary.occupied" accent="danger" routerLink="/positions"></app-kpi-card>
+    <app-kpi-card label="Rezervirano" [value]="summary.reserved" accent="warning" routerLink="/positions"></app-kpi-card>
+    <app-kpi-card label="Ističe uskoro" [value]="summary.expiringSoon" accent="warning" routerLink="/positions"></app-kpi-card>
+    <app-kpi-card label="Neaktivno" [value]="summary.inactive" routerLink="/positions"></app-kpi-card>
+    <app-kpi-card label="Ugovori koji ističu" [value]="summary.expiringContracts" routerLink="/suppliers"></app-kpi-card>
+    <app-kpi-card label="Pokrivenost objekata" [value]="summary.coverage + '%'" accent="success" routerLink="/stores"></app-kpi-card>
   </div>
 
   <div class="dashboard__grid">
@@ -26,6 +64,24 @@
         [animations]="true"
         [labels]="true"
       ></ngx-charts-pie-chart>
+    </div>
+
+    <div class="card card--wide" *ngIf="trend$ | async as trend">
+      <header class="card__header">
+        <h2>Mjesečni trend</h2>
+        <p class="muted">Kretanje zauzetosti pozicija i prihoda od zakupa</p>
+      </header>
+      <ngx-charts-line-chart
+        [scheme]="{ domain: ['#38bdf8', '#c084fc'] }"
+        [results]="trend"
+        [legend]="true"
+        [autoScale]="true"
+        [animations]="true"
+        [showXAxisLabel]="true"
+        [showYAxisLabel]="true"
+        xAxisLabel="Mjesec"
+        yAxisLabel="Vrijednost"
+      ></ngx-charts-line-chart>
     </div>
 
     <div class="card" *ngIf="expiringContracts$ | async as expiring">

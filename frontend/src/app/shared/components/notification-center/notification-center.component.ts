@@ -9,7 +9,7 @@ import { Notification, NotificationService } from '../../../core/services/notifi
   changeDetection: ChangeDetectionStrategy.OnPush
 })
 export class NotificationCenterComponent {
-  readonly notifications$: Observable<Notification> = this.notifications.notifications$;
+  readonly notifications$: Observable<Notification | null> = this.notifications.notifications$;
 
   constructor(private readonly notifications: NotificationService) {}
 }

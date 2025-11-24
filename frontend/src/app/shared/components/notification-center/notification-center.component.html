@@ -1,3 +1,5 @@
-<div class="toast" *ngIf="notifications$ | async as notification" [class]="notification.type">
-  {{ notification.message }}
-</div>
+<ng-container *ngIf="notifications$ | async as notification">
+  <div class="toast" *ngIf="notification" [class]="notification.type">
+    {{ notification.message }}
+  </div>
+</ng-container>
