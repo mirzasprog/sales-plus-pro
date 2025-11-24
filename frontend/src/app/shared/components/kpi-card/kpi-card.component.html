@@ -1,4 +1,10 @@
-<div class="kpi" [class]="'accent-' + accent">
+<div
+  class="kpi"
+  [class]="'accent-' + accent"
+  [class.kpi--link]="routerLink || action"
+  [routerLink]="routerLink"
+  (click)="handleClick($event)"
+>
   <span class="kpi__label">{{ label }}</span>
   <span class="kpi__value">{{ value }}</span>
 </div>
