@@ -26,11 +26,17 @@ export class Node {
     this._y = opts['y'] ?? 0;
     this._rotation = opts['rotation'] ?? 0;
     this._draggable = opts['draggable'] ?? false;
+
     this.applyTransforms();
+    this.registerDomEvents();      // <-- veže click/dblclick/contextmenu/...
     if (this._draggable) {
-      this.registerDrag();
+      this.registerDrag();         // <-- drag bez gašenja clicka
     }
   }
+
+  // -----------------------------
+  // Public API (id, name, layout)
+  // -----------------------------
 
   id(): string | undefined {
     return this._id;
@@ -115,28 +121,103 @@ export class Node {
     return value;
   }
 
+  visible(value?: boolean): boolean {
+    if (value === undefined) {
+      return this.element.style.display !== 'none';
+    }
+    this.element.style.display = value ? 'block' : 'none';
+    return value;
+  }
+
   destroy(): void {
     this.element.remove();
   }
 
+  // -----------------------------
+  // Event API
+  // -----------------------------
+
   on(eventName: string, handler: EventHandler): void {
-    const collection = this.listeners.get(eventName) ?? [];
-    collection.push(handler);
-    this.listeners.set(eventName, collection);
+    // podržava "click tap", "dblclick dbltap" itd.
+    const names = eventName.split(' ').filter(Boolean);
+    for (const name of names) {
+      const collection = this.listeners.get(name) ?? [];
+      collection.push(handler);
+      this.listeners.set(name, collection);
+    }
   }
 
   emit(eventName: string, evt: any): void {
-    this.listeners.get(eventName)?.forEach((handler) => handler({ evt, target: this }));
+    const handlers = this.listeners.get(eventName);
+    if (!handlers?.length) {
+      return;
+    }
+    const wrapped: KonvaEventObject = { evt, target: this };
+    handlers.forEach((handler) => handler(wrapped));
   }
+
+  // -----------------------------
+  // Internal helpers
+  // -----------------------------
 
   private applyTransforms(): void {
     this.element.style.position = 'absolute';
     this.element.style.transformOrigin = 'top left';
-    this.element.style.transform = `translate(${this._x}px, ${this._y}px) rotate(${this._rotation}deg) scale(${this._scaleX}, ${
-      this._scaleY
-    })`;
+    this.element.style.transform = `translate(${this._x}px, ${this._y}px) rotate(${this._rotation}deg) scale(${this._scaleX}, ${this._scaleY})`;
   }
 
+  private registerDomEvents(): void {
+    // mouse → naši eventovi
+    this.element.addEventListener('click', (e) => {
+      this.emit('click', e);
+    });
+
+    this.element.addEventListener('dblclick', (e) => {
+      this.emit('dblclick', e);
+      this.emit('dbltap', e);
+    });
+
+    this.element.addEventListener('contextmenu', (e) => {
+      this.emit('contextmenu', e);
+    });
+
+    this.element.addEventListener('wheel', (e) => {
+      this.emit('wheel', e);
+    });
+
+    this.element.addEventListener('mousedown', (e) => {
+      this.emit('mousedown', e);
+    });
+    this.element.addEventListener('mouseup', (e) => {
+      this.emit('mouseup', e);
+    });
+    this.element.addEventListener('mousemove', (e) => {
+      this.emit('mousemove', e);
+    });
+
+    // touch → tap/dbltap
+    let lastTapTime = 0;
+    this.element.addEventListener(
+      'touchend',
+      (e) => {
+        const now = Date.now();
+        const delta = now - lastTapTime;
+        lastTapTime = now;
+
+        this.emit('tap', e);
+        if (delta < 300) {
+          this.emit('dbltap', e);
+        }
+      },
+      { passive: true }
+    );
+  }
+
+  /**
+   * Drag logika (pomjeranje elemenata).
+   * BITNO: ne radimo preventDefault() na pointerdown,
+   * da se ne ubiju click/dblclick eventovi.
+   */
   private registerDrag(): void {
     let dragging = false;
     let startX = 0;
@@ -151,7 +232,7 @@ export class Node {
       originX = this._x;
       originY = this._y;
       this.element.setPointerCapture(event.pointerId);
-      event.preventDefault();
+      // NEMA event.preventDefault(); ovdje
     };
 
     const onPointerMove = (event: PointerEvent) => {
@@ -207,11 +288,11 @@ class Container extends Node {
   }
 
   batchDraw(): void {
-    // no-op for DOM implementation
+    // DOM implementacija nema canvas draw, no-op
   }
 
   draw(): void {
-    // no-op placeholder for compatibility
+    // no-op
   }
 }
 
@@ -229,6 +310,7 @@ class Stage extends Container {
     stageEl.style.overflow = 'hidden';
     stageEl.style.touchAction = 'none';
     opts.container.appendChild(stageEl);
+
     super(stageEl, { draggable: opts.draggable ?? false });
     this._width = opts.width;
     this._height = opts.height;
@@ -236,6 +318,7 @@ class Stage extends Container {
     stageEl.addEventListener('mousemove', (evt) => {
       this.pointer = { x: evt.offsetX, y: evt.offsetY };
     });
+
     stageEl.addEventListener('touchmove', (evt) => {
       const touch = evt.touches[0];
       this.pointer = { x: touch.clientX, y: touch.clientY };
@@ -286,6 +369,38 @@ class Stage extends Container {
 
   getPointerPosition(): { x: number; y: number } {
     return this.pointer;
+  }
+
+  setPointersPositions(evt: any): void {
+    if (!evt) return;
+
+    const anyEvt = evt as any;
+
+    if (typeof anyEvt.offsetX === 'number' && typeof anyEvt.offsetY === 'number') {
+      this.pointer = {
+        x: anyEvt.offsetX,
+        y: anyEvt.offsetY
+      };
+      return;
+    }
+
+    if (typeof anyEvt.clientX === 'number' && typeof anyEvt.clientY === 'number') {
+      const rect = this.element.getBoundingClientRect();
+      this.pointer = {
+        x: anyEvt.clientX - rect.left,
+        y: anyEvt.clientY - rect.top
+      };
+      return;
+    }
+
+    if (anyEvt.touches?.length) {
+      const t = anyEvt.touches[0];
+      const rect = this.element.getBoundingClientRect();
+      this.pointer = {
+        x: t.clientX - rect.left,
+        y: t.clientY - rect.top
+      };
+    }
   }
 }
 
@@ -367,6 +482,7 @@ class Transformer extends Node {
     wrap.style.position = 'absolute';
     wrap.style.border = `1px dashed ${opts['borderStroke'] ?? '#0ea5e9'}`;
     wrap.style.pointerEvents = 'none';
+    wrap.style.boxSizing = 'border-box';
     super(wrap, opts);
     this.box = wrap;
   }
@@ -379,16 +495,21 @@ class Transformer extends Node {
   private render(): void {
     this.box.innerHTML = '';
     this.handles = [];
+
     if (!this.targets.length) {
       this.box.style.display = 'none';
       return;
     }
+
     this.box.style.display = 'block';
+
     const target = this.targets[0];
     const rect = target.element.getBoundingClientRect();
     const parentRect = (target.getParent()?.element ?? target.element.parentElement ?? document.body).getBoundingClientRect();
+
     const offsetX = rect.left - parentRect.left;
     const offsetY = rect.top - parentRect.top;
+
     this.box.style.left = `${offsetX}px`;
     this.box.style.top = `${offsetY}px`;
     this.box.style.width = `${rect.width}px`;
@@ -470,14 +591,12 @@ class Transformer extends Node {
   }
 
   private addRotation(handle: HTMLElement, target: Node, rect: DOMRect, parentRect: DOMRect): void {
-    let startAngle = target.rotation();
     let centerX = 0;
     let centerY = 0;
 
     const onPointerDown = (event: PointerEvent) => {
       centerX = parentRect.left + rect.width / 2;
       centerY = parentRect.top + rect.height / 2;
-      startAngle = target.rotation();
       document.addEventListener('pointermove', onPointerMove);
       document.addEventListener('pointerup', onPointerUp);
       event.preventDefault();
@@ -508,9 +627,8 @@ const Konva = {
   Text,
   Line,
   Transformer,
-  Node,
   KonvaEventObject: class {}
 };
 
-export { Stage, Layer, Group, Rect, Text, Line, Transformer };
+export { Stage, Layer, Group, Rect, Text, Line, Transformer,  };
 export default Konva;

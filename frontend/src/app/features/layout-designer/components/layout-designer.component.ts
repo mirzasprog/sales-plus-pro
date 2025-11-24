@@ -47,9 +47,15 @@ export class LayoutDesignerComponent implements OnInit, AfterViewInit, OnDestroy
   readonly gridSize = 20;
   snapToGrid = true;
   zoom = 1;
+
+  // context menu (desni klik)
   contextMenu = { visible: false, x: 0, y: 0, targetId: '' };
+
+  // modal (double click)
   editModal = { open: false, elementId: '' };
+
   readonly constructionTypes: DesignerElementType[] = ['Wall', 'Door', 'Window', 'Entrance', 'Cash Register'];
+
   private isPanning = false;
   private panOrigin: { x: number; y: number; stageX: number; stageY: number } | null = null;
   private stage?: Stage;
@@ -74,6 +80,7 @@ export class LayoutDesignerComponent implements OnInit, AfterViewInit, OnDestroy
     Counter: { icon: '🧾', color: '#e11d48', fill: 'rgba(225, 29, 72, 0.16)', label: 'Pult' }
   };
 
+  // Desni panel
   readonly inspectorForm = this.fb.group({
     label: ['', [Validators.required, Validators.minLength(3)]],
     type: ['Gondola' as DesignerElementType, Validators.required],
@@ -87,6 +94,7 @@ export class LayoutDesignerComponent implements OnInit, AfterViewInit, OnDestroy
     note: ['']
   });
 
+  // Modal za quick edit
   readonly modalForm = this.fb.group({
     label: ['', [Validators.required, Validators.minLength(3)]],
     type: ['Gondola' as DesignerElementType, Validators.required],
@@ -98,16 +106,24 @@ export class LayoutDesignerComponent implements OnInit, AfterViewInit, OnDestroy
     rotation: [0, [Validators.min(-180), Validators.max(180)]],
     supplier: [''],
     note: [''],
-    price: [null],
+    price: [null as number | null],
     contractStart: [''],
     contractEnd: ['']
   });
 
-  constructor(private readonly layoutService: LayoutService, private readonly fb: FormBuilder) {}
+  constructor(
+    private readonly layoutService: LayoutService,
+    private readonly fb: FormBuilder
+  ) {}
+
+  // ---------------------------------------------------------------------------
+  // Lifecycle
+  // ---------------------------------------------------------------------------
 
   ngOnInit(): void {
     this.layoutService.loadDemoLayout();
 
+    // Sink selektovanog elementa u inspector form
     this.selectedElement$
       .pipe(takeUntil(this.destroy$))
       .subscribe((element) => {
@@ -131,6 +147,7 @@ export class LayoutDesignerComponent implements OnInit, AfterViewInit, OnDestroy
         this.formPatching = false;
       });
 
+    // Promjene u inspector form -> update elementa
     this.inspectorForm.valueChanges
       .pipe(
         takeUntil(this.destroy$),
@@ -161,10 +178,12 @@ export class LayoutDesignerComponent implements OnInit, AfterViewInit, OnDestroy
         this.updateTransformerSelection();
       });
 
+    // Render elemenata
     this.elements$
       .pipe(takeUntil(this.destroy$))
       .subscribe((elements) => this.renderElements(elements));
 
+    // Boundary
     this.layoutMeta$
       .pipe(
         takeUntil(this.destroy$),
@@ -182,19 +201,21 @@ export class LayoutDesignerComponent implements OnInit, AfterViewInit, OnDestroy
     this.destroy$.complete();
   }
 
+  // ---------------------------------------------------------------------------
+  // Paleta i drag & drop
+  // ---------------------------------------------------------------------------
+
   handlePaletteClick(type: DesignerElementType): void {
     this.spawnElement(type, { x: 60, y: 60 });
   }
 
   handlePaletteDragStart(event: DragEvent, type: DesignerElementType): void {
-    // enable native drag metadata so we can create fixtures on drop
     event.dataTransfer?.setData('application/element-type', type);
     event.dataTransfer?.setData('text/plain', type);
     event.dataTransfer?.setDragImage(new Image(), 0, 0);
   }
 
   handleCanvasDragOver(event: DragEvent): void {
-    // prevent default so drop fires on the Konva container
     event.preventDefault();
     if (event.dataTransfer) {
       event.dataTransfer.dropEffect = 'copy';
@@ -202,18 +223,20 @@ export class LayoutDesignerComponent implements OnInit, AfterViewInit, OnDestroy
   }
 
   handleCanvasDrop(event: DragEvent): void {
-    // create a new element at the drop location (with snapping if enabled)
     event.preventDefault();
     const type = event.dataTransfer?.getData('application/element-type') as DesignerElementType;
-    const stage = this.stage;
-    if (!type || !stage) {
+    const host = this.stageHost?.nativeElement;
+    if (!type || !host) {
       return;
     }
-    stage.setPointersPositions(event as any);
-    const pointer = stage.getPointerPosition();
-    if (!pointer) {
-      return;
-    }
+
+    // izračunaj lokalnu poziciju na canvasu
+    const rect = host.getBoundingClientRect();
+    const pointer = {
+      x: event.clientX - rect.left,
+      y: event.clientY - rect.top
+    };
+
     const defaults = this.defaultDimensions(type);
     const position = {
       x: pointer.x - defaults.width / 2,
@@ -226,6 +249,10 @@ export class LayoutDesignerComponent implements OnInit, AfterViewInit, OnDestroy
   showStatus(type: DesignerElementType): boolean {
     return !this.isConstruction(type);
   }
+
+  // ---------------------------------------------------------------------------
+  // Undo / redo / selection / layout
+  // ---------------------------------------------------------------------------
 
   undo(): void {
     this.layoutService.undo();
@@ -287,6 +314,10 @@ export class LayoutDesignerComponent implements OnInit, AfterViewInit, OnDestroy
     this.snapToGrid = !this.snapToGrid;
   }
 
+  // ---------------------------------------------------------------------------
+  // Zoom & fit
+  // ---------------------------------------------------------------------------
+
   zoomIn(): void {
     this.applyZoom(this.zoom + 0.1);
   }
@@ -304,6 +335,7 @@ export class LayoutDesignerComponent implements OnInit, AfterViewInit, OnDestroy
     if (!elements.length) {
       this.applyZoom(1);
       stage.position({ x: 20, y: 20 });
+      stage.batchDraw();
       return;
     }
     const minX = Math.min(...elements.map((el) => el.x));
@@ -317,19 +349,30 @@ export class LayoutDesignerComponent implements OnInit, AfterViewInit, OnDestroy
     const scaleX = (stage.width() - padding) / contentWidth;
     const scaleY = (stage.height() - padding) / contentHeight;
     const nextZoom = Math.min(1.8, Math.max(0.4, Math.min(scaleX, scaleY)));
+
     this.applyZoom(nextZoom);
-    stage.position({ x: (stage.width() - contentWidth * nextZoom) / 2 - minX * nextZoom, y: (stage.height() - contentHeight * nextZoom) / 2 - minY * nextZoom });
+
+    stage.position({
+      x: (stage.width() - contentWidth * nextZoom) / 2 - minX * nextZoom,
+      y: (stage.height() - contentHeight * nextZoom) / 2 - minY * nextZoom
+    });
     stage.batchDraw();
   }
 
   private applyZoom(value: number): void {
     const clamped = Math.min(2.4, Math.max(0.4, value));
     this.zoom = clamped;
-    if (this.stage) {
-      this.stage.scale({ x: clamped, y: clamped });
-      this.stage.batchDraw();
+    if (!this.stage) {
+      return;
     }
+    this.stage.scale({ x: clamped, y: clamped });
+    this.stage.batchDraw();
+    this.drawGrid(); // grid ovisi o zoomu
   }
+
+  // ---------------------------------------------------------------------------
+  // Stage / grid / boundary
+  // ---------------------------------------------------------------------------
 
   private createStage(): void {
     const host = this.stageHost?.nativeElement;
@@ -347,29 +390,25 @@ export class LayoutDesignerComponent implements OnInit, AfterViewInit, OnDestroy
     const gridLayer = new Konva.Layer({ listening: false });
     const elementLayer = new Konva.Layer();
     const transformer = new Konva.Transformer({
-      rotateEnabled: true,
-      rotationSnaps: [0, 90, 180, 270],
-      borderStroke: '#0ea5e9',
-      anchorStroke: '#0ea5e9',
-      anchorFill: '#fff',
-      anchorSize: 8,
-      padding: 6
+      borderStroke: '#0ea5e9'
     });
 
     elementLayer.add(transformer);
-
     stage.add(gridLayer);
     stage.add(elementLayer);
 
-    stage.on('wheel', (evt: KonvaEventObject<WheelEvent>) => {
-      evt.evt.preventDefault();
+    // Zoom wheel – koristimo native event jer tvoj custom Konva ne emituje 'wheel'
+    const stageElement = (stage as any).element as HTMLElement;
+    stageElement.addEventListener('wheel', (evt: WheelEvent) => {
+      evt.preventDefault();
       const scaleBy = 1.04;
       const oldScale = stage.scaleX();
-      const pointer = stage.getPointerPosition();
-      if (!pointer) {
-        return;
-      }
-      const direction = evt.evt.deltaY > 0 ? -1 : 1;
+      const rect = stageElement.getBoundingClientRect();
+      const pointer = {
+        x: evt.clientX - rect.left,
+        y: evt.clientY - rect.top
+      };
+      const direction = evt.deltaY > 0 ? -1 : 1;
       const newScale = direction > 0 ? oldScale * scaleBy : oldScale / scaleBy;
       const clamped = Math.min(2.4, Math.max(0.4, newScale));
       const mousePointTo = {
@@ -384,41 +423,41 @@ export class LayoutDesignerComponent implements OnInit, AfterViewInit, OnDestroy
       stage.position(newPos);
       stage.batchDraw();
       this.zoom = clamped;
+      this.drawGrid();
     });
 
-    stage.on('mousedown touchstart', (evt: KonvaEventObject<MouseEvent | TouchEvent>) => {
+    // Panning (space + drag ili srednji klik po želji – ovdje samo lijevi na prazno)
+    stageElement.addEventListener('mousedown', (evt: MouseEvent) => {
       this.contextMenu.visible = false;
-      const point = evt.evt instanceof TouchEvent ? evt.evt.touches[0] : evt.evt;
-      if (evt.target === stage) {
+      const target = evt.target as HTMLElement;
+      // Ako klik nije na elementu (designer-element), tretiramo kao pan
+      const isStageClick = target === stageElement;
+      if (isStageClick) {
         this.isPanning = true;
-        this.panOrigin = { x: point.clientX, y: point.clientY, stageX: stage.x(), stageY: stage.y() };
-        return;
-      }
-      const id = evt.target.getParent()?.id();
-      if (id) {
-        this.handleElementSelection(id, evt.evt.shiftKey || evt.evt.metaKey);
+        this.panOrigin = { x: evt.clientX, y: evt.clientY, stageX: stage.x(), stageY: stage.y() };
       }
     });
 
-    stage.on('mouseup touchend', () => {
+    stageElement.addEventListener('mouseup', () => {
       this.isPanning = false;
       this.panOrigin = null;
     });
 
-    stage.on('mousemove touchmove', (evt: KonvaEventObject<MouseEvent | TouchEvent>) => {
-      if (this.isPanning && this.panOrigin) {
-        const point = evt.evt instanceof TouchEvent ? evt.evt.touches[0] : evt.evt;
-        const dx = point.clientX - this.panOrigin.x;
-        const dy = point.clientY - this.panOrigin.y;
-        stage.position({ x: this.panOrigin.stageX + dx, y: this.panOrigin.stageY + dy });
-        stage.batchDraw();
+    stageElement.addEventListener('mousemove', (evt: MouseEvent) => {
+      if (!this.isPanning || !this.panOrigin) {
+        return;
       }
+      const dx = evt.clientX - this.panOrigin.x;
+      const dy = evt.clientY - this.panOrigin.y;
+      stage.position({ x: this.panOrigin.stageX + dx, y: this.panOrigin.stageY + dy });
+      stage.batchDraw();
     });
 
     this.stage = stage;
     this.gridLayer = gridLayer;
     this.elementLayer = elementLayer;
     this.transformer = transformer;
+
     this.drawGrid();
   }
 
@@ -428,6 +467,7 @@ export class LayoutDesignerComponent implements OnInit, AfterViewInit, OnDestroy
     if (!layer || !stage) {
       return;
     }
+
     layer.destroyChildren();
     const gridSize = this.gridSize;
     const width = stage.width() / this.zoom;
@@ -473,18 +513,23 @@ export class LayoutDesignerComponent implements OnInit, AfterViewInit, OnDestroy
     this.elementLayer.batchDraw();
   }
 
+  // ---------------------------------------------------------------------------
+  // Render elemenata
+  // ---------------------------------------------------------------------------
+
   private renderElements(elements: DesignerElement[]): void {
-    const stage = this.stage;
     const layer = this.elementLayer;
     const transformer = this.transformer;
-    if (!stage || !layer || !transformer) {
+    if (!layer || !transformer) {
       return;
     }
+
+    // Očisti stare elemente (osim boundary i transformera)
     layer
       .getChildren((node: KonvaNode) => node !== transformer && node !== this.boundaryRect)
       .forEach((node: KonvaNode) => node.destroy());
 
-    elements.forEach((element) => {
+    for (const element of elements) {
       const group = new Konva.Group({
         id: element.id,
         x: element.x,
@@ -502,13 +547,16 @@ export class LayoutDesignerComponent implements OnInit, AfterViewInit, OnDestroy
         strokeWidth: 2,
         fill: this.typeStyle(element.type).fill
       });
+
+      const baseLabel = this.typeStyle(element.type).label;
       const label = new Konva.Text({
-        text: `${this.typeStyle(element.type).label} • ${element.label}`,
+        text: `${baseLabel} • ${element.label}`,
         fontSize: 14,
         fontFamily: 'Inter, sans-serif',
         fill: '#e2e8f0',
         padding: 6
       });
+
       const dimension = new Konva.Text({
         text: `${element.width}×${element.height} cm` + (element.supplier ? ` • ${element.supplier}` : ''),
         fontSize: 12,
@@ -525,6 +573,7 @@ export class LayoutDesignerComponent implements OnInit, AfterViewInit, OnDestroy
       group.add(label);
       group.add(dimension);
 
+      // Drag + snap
       group.on('dragmove', () => {
         if (this.snapToGrid) {
           const snappedX = Math.round(group.x() / this.gridSize) * this.gridSize;
@@ -538,15 +587,19 @@ export class LayoutDesignerComponent implements OnInit, AfterViewInit, OnDestroy
         this.layoutService.updateElement({ ...element, x: group.x(), y: group.y() });
       });
 
+      // Transform (resize/rotate) – kompatibilno s tvojim custom Transformerom
       group.on('transformend', () => {
-        const nextWidth = rect.width() * group.scaleX();
-        const nextHeight = rect.height() * group.scaleY();
+        // u tvom wrapperu Transformer direktno mijenja width/height na targetu (ovdje group)
+        const nextWidth = group.width();
+        const nextHeight = group.height();
         const nextRotation = group.rotation();
+
         rect.width(nextWidth);
         rect.height(nextHeight);
         label.width(nextWidth);
         dimension.width(nextWidth);
-        group.scale({ x: 1, y: 1 });
+        dimension.y(nextHeight - 24);
+
         this.layoutService.updateElement({
           ...element,
           x: group.x(),
@@ -557,19 +610,22 @@ export class LayoutDesignerComponent implements OnInit, AfterViewInit, OnDestroy
         });
       });
 
+      // Selektovanje – jedan klik → selekcija + transformer vezan
       group.on('click tap', (evt: KonvaEventObject<MouseEvent | TouchEvent>) => {
-        this.handleElementSelection(element.id, evt.evt.shiftKey || evt.evt.metaKey);
+        const isMulti = (evt.evt as any).shiftKey || (evt.evt as any).metaKey;
+        this.handleElementSelection(element.id, isMulti);
       });
 
+      // Double-click → modal
       group.on('dblclick dbltap', () => {
-        // double click opens the quick edit modal
         this.openFixtureModal(element);
       });
 
+      // Right-click → context meni
       group.on('contextmenu', (evt: KonvaEventObject<MouseEvent>) => {
-        // right click shows a contextual menu for duplicate/delete/layering
         evt.evt.preventDefault();
-        this.handleElementSelection(element.id, evt.evt.shiftKey || evt.evt.metaKey);
+        const isMulti = (evt.evt as any).shiftKey || (evt.evt as any).metaKey;
+        this.handleElementSelection(element.id, isMulti);
         this.contextMenu = {
           visible: true,
           x: evt.evt.clientX,
@@ -579,16 +635,24 @@ export class LayoutDesignerComponent implements OnInit, AfterViewInit, OnDestroy
       });
 
       layer.add(group);
-    });
+    }
 
     this.updateTransformerSelection();
     layer.batchDraw();
-    this.drawGrid();
   }
+
+  // ---------------------------------------------------------------------------
+  // Selektovanje & transformer
+  // ---------------------------------------------------------------------------
 
   private handleElementSelection(id: string, multiSelect: boolean): void {
     const current = this.layoutService.selectedIds;
-    const next = multiSelect ? (current.includes(id) ? current.filter((item) => item !== id) : [...current, id]) : [id];
+    const next = multiSelect
+      ? current.includes(id)
+        ? current.filter((item) => item !== id)
+        : [...current, id]
+      : [id];
+
     this.layoutService.selectElements(next);
     this.contextMenu.visible = false;
     this.updateTransformerSelection();
@@ -600,15 +664,22 @@ export class LayoutDesignerComponent implements OnInit, AfterViewInit, OnDestroy
     if (!transformer || !layer) {
       return;
     }
+
     const nodes = layer
       .getChildren()
       .filter((child: KonvaNode) => {
-        const id = child.id();
-        return child.name() === 'designer-element' && !!id && this.layoutService.selectedIds.includes(id);
+        const id = (child as any).id?.();
+        return (child as any).name?.() === 'designer-element' && !!id && this.layoutService.selectedIds.includes(id);
       });
+
+    // veži transformer na selektirane node-ove; tvoj custom Transformer će sam prikazati/sakriti okvir
     transformer.nodes(nodes as KonvaNode[]);
     layer.draw();
   }
+
+  // ---------------------------------------------------------------------------
+  // Helperi za stil i tipove
+  // ---------------------------------------------------------------------------
 
   statusColor(status: PositionStatus): string {
     switch (status) {
@@ -633,11 +704,15 @@ export class LayoutDesignerComponent implements OnInit, AfterViewInit, OnDestroy
     return this.constructionTypes.includes(type);
   }
 
+  // ---------------------------------------------------------------------------
+  // CRUD nad elementima
+  // ---------------------------------------------------------------------------
+
   private spawnElement(type: DesignerElementType, position: { x: number; y: number }): void {
-    // central helper for palette click/drag-drop to respect snapping and defaults
     const defaults = this.defaultDimensions(type);
     const baseX = this.snapToGrid ? Math.round(position.x / this.gridSize) * this.gridSize : position.x;
     const baseY = this.snapToGrid ? Math.round(position.y / this.gridSize) * this.gridSize : position.y;
+
     const element: DesignerElement = {
       id: uuidv4(),
       label: `${this.typeStyles[type]?.label ?? type} ${Math.floor(Math.random() * 90 + 10)}`,
@@ -651,6 +726,7 @@ export class LayoutDesignerComponent implements OnInit, AfterViewInit, OnDestroy
       supplier: this.isConstruction(type) ? undefined : defaults.supplier,
       note: defaults.note
     };
+
     this.layoutService.addElement(element);
   }
 
@@ -683,25 +759,39 @@ export class LayoutDesignerComponent implements OnInit, AfterViewInit, OnDestroy
       return;
     }
     const [item] = elements.splice(index, 1);
+
     if (direction === 'front') {
       elements.push(item);
     } else {
       elements.unshift(item);
     }
+
     this.layoutService.importElements(elements);
     this.layoutService.selectElement(id);
     this.contextMenu.visible = false;
   }
 
+  // ---------------------------------------------------------------------------
+  // Modal (quick edit)
+  // ---------------------------------------------------------------------------
+
   private openFixtureModal(element: DesignerElement): void {
     this.editModal = { open: true, elementId: element.id };
     this.layoutService.selectElement(element.id);
     this.updateTransformerSelection();
+
     this.modalForm.patchValue({
-      ...element
+      ...element,
+      price: (element as any).price ?? null,
+      contractStart: (element as any).contractStart ?? '',
+      contractEnd: (element as any).contractEnd ?? ''
     });
+
     if (this.isConstruction(element.type)) {
-      this.modalForm.patchValue({ status: 'Available', supplier: '' }, { emitEvent: false });
+      this.modalForm.patchValue(
+        { status: 'Available', supplier: '' },
+        { emitEvent: false }
+      );
     }
   }
 
@@ -717,22 +807,33 @@ export class LayoutDesignerComponent implements OnInit, AfterViewInit, OnDestroy
     if (!existing) {
       return;
     }
+
     const formValue = this.modalForm.value;
-    const cleanedSupplier = this.isConstruction(formValue.type as DesignerElementType) ? undefined : formValue.supplier ?? existing.supplier;
-    const cleanedStatus = this.isConstruction(formValue.type as DesignerElementType)
+    const type = formValue.type as DesignerElementType;
+    const isConstruction = this.isConstruction(type);
+
+    const cleanedSupplier = isConstruction ? undefined : formValue.supplier ?? existing.supplier;
+    const cleanedStatus: PositionStatus = isConstruction
       ? existing.status
       : ((formValue.status as PositionStatus) ?? existing.status);
+
     const updated: DesignerElement = {
       ...existing,
       ...formValue,
+      type,
       status: cleanedStatus,
       supplier: cleanedSupplier,
       rotation: Math.round(formValue.rotation ?? existing.rotation)
     } as DesignerElement;
+
     this.layoutService.updateElement(updated);
     this.updateTransformerSelection();
     this.closeModal();
   }
+
+  // ---------------------------------------------------------------------------
+  // Default dimenzije po tipu
+  // ---------------------------------------------------------------------------
 
   private defaultDimensions(type: DesignerElementType): { width: number; height: number; note?: string; supplier?: string } {
     switch (type) {
