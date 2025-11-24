@@ -29,6 +29,10 @@ export class LocalStoreLayoutService {
     return this.loadLayouts().pipe(map((layouts) => layouts.find((layout) => layout.id === id)));
   }
 
+  getLayoutByObjectId(objectId: string): Observable<LayoutDefinition | undefined> {
+    return this.loadLayouts().pipe(map((layouts) => layouts.find((layout) => layout.objectId === objectId)));
+  }
+
   saveLayout(layout: LayoutDefinition): Observable<LayoutDefinition> {
     return this.loadLayouts().pipe(
       tap((layouts) => {

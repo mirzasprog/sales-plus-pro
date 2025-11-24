@@ -1,5 +1,6 @@
 import { Injectable } from '@angular/core';
 import { BehaviorSubject, combineLatest, map, Observable, of, tap } from 'rxjs';
+import { v4 as uuidv4 } from 'uuid';
 import { DesignerElement, LayoutDefinition } from '../../features/layout-designer/models/designer-element';
 import { LocalStoreLayoutService } from './local-store-layout.service';
 
@@ -43,6 +44,10 @@ export class LayoutService {
     return this.store.getLayoutById(id).pipe(tap((layout) => this.applyLayout(layout)));
   }
 
+  loadLayoutForObject(objectId: string): Observable<LayoutDefinition | undefined> {
+    return this.store.getLayoutByObjectId(objectId).pipe(tap((layout) => this.applyLayout(layout)));
+  }
+
   saveLayout(name: string | null = null): Observable<LayoutDefinition | null> {
     const current = this.activeLayout$.value;
     if (!current) {
@@ -57,6 +62,30 @@ export class LayoutService {
     };
 
     return this.store.saveLayout(next).pipe(tap((layout) => this.activeLayout$.next(layout)));
+  }
+
+  startNewLayoutForObject(
+    objectId: string,
+    name: string,
+    boundaryWidth = 1200,
+    boundaryHeight = 800
+  ): LayoutDefinition {
+    const layout: LayoutDefinition = {
+      id: uuidv4(),
+      name,
+      objectId,
+      boundaryWidth,
+      boundaryHeight,
+      elements: [],
+      updatedAt: new Date().toISOString()
+    };
+
+    this.applyLayout(layout);
+    return layout;
+  }
+
+  clearActiveLayout(): void {
+    this.applyLayout(undefined);
   }
 
   addElement(element: DesignerElement): void {
