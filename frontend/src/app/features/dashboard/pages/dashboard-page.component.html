@@ -127,7 +127,7 @@
             <div class="muted">{{ store.city }}</div>
           </div>
           <div class="pill">
-            <span class="dot occupied"></span>{{ (store.occupied / store.totalPositions) * 100 | number: '1.0-0' }}%
+            <span class="dot occupied"></span>{{ store.occupancy | number: '1.0-0' }}%
           </div>
         </div>
       </div>

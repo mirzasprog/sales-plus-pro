@@ -41,6 +41,13 @@ interface DashboardTrendPoint {
   series: { name: string; value: number }[];
 }
 
+interface StoreCoverage {
+  id: string;
+  name: string;
+  city: string;
+  occupancy: number;
+}
+
 @Component({
   selector: 'app-dashboard-page',
   templateUrl: './dashboard-page.component.html',
@@ -51,7 +58,7 @@ export class DashboardPageComponent implements OnInit {
   summary$!: Observable<DashboardSummary>;
   expiringContracts$!: Observable<{ supplier: string; endDate: string; value: number }[]>;
   topSuppliers$!: Observable<Supplier[]>;
-  storeCoverage$!: Observable<Store[]>;
+  storeCoverage$!: Observable<StoreCoverage[]>;
   trend$!: Observable<DashboardTrendPoint[]>;
   filterOptions$!: Observable<{
     regions: string[];
@@ -104,8 +111,21 @@ export class DashboardPageComponent implements OnInit {
 
     const dashboardState$ = combineLatest([positions$, contracts$, stores$, suppliers$, this.filters$]).pipe(
       map(([positions, contracts, stores, suppliers, filters]) => {
+        const storeLookup = new Map(stores.map((store) => [store.id, store]));
+        const supplierLookup = new Map(suppliers.map((supplier) => [supplier.id, supplier]));
+
+        const normalizedPositions = positions.map((position) => {
+          const store = storeLookup.get(position.retailObjectId);
+          const supplier = position.supplierId ? supplierLookup.get(position.supplierId) : undefined;
+          return {
+            ...position,
+            retailObjectName: store?.name ?? position.retailObjectName,
+            supplier: supplier?.name ?? position.supplier
+          } as Position;
+        });
+
         const positionMatchesFilters = (position: Position): boolean => {
-          const store = stores.find((s) => s.id === position.retailObjectId);
+          const store = storeLookup.get(position.retailObjectId);
           const matchesRegion = filters.region ? store?.city === filters.region : true;
           const matchesStore = filters.store ? position.retailObjectId === filters.store : true;
           const matchesSupplier = filters.supplier ? position.supplierId === filters.supplier : true;
@@ -113,11 +133,11 @@ export class DashboardPageComponent implements OnInit {
           return matchesRegion && matchesStore && matchesSupplier && matchesType;
         };
 
-        const filteredPositions = positions.filter(positionMatchesFilters);
+        const filteredPositions = normalizedPositions.filter(positionMatchesFilters);
 
         const filteredContracts = contracts.filter((contract) => {
-          const contractPosition = positions.find((p) => p.id === contract.positionId);
-          const contractStore = stores.find((s) => s.id === contract.storeId);
+          const contractPosition = normalizedPositions.find((p) => p.id === contract.positionId);
+          const contractStore = storeLookup.get(contract.storeId);
           const matchesRegion = filters.region ? contractStore?.city === filters.region : true;
           const matchesStore = filters.store ? contract.storeId === filters.store : true;
           const matchesSupplier = filters.supplier ? contract.supplierId === filters.supplier : true;
@@ -131,20 +151,27 @@ export class DashboardPageComponent implements OnInit {
           return matchesRegion && matchesStore;
         });
 
-        return { filters, positions: filteredPositions, contracts: filteredContracts, stores: filteredStores, suppliers };
+        const storeCoverage = this.buildStoreCoverage(filteredPositions, storeLookup);
+
+        return {
+          filters,
+          positions: filteredPositions,
+          contracts: filteredContracts,
+          stores: filteredStores,
+          suppliers,
+          storeCoverage
+        };
       }),
       shareReplay(1)
     );
 
     this.summary$ = dashboardState$.pipe(
-      map(({ positions, contracts, stores }) => {
+      map(({ positions, contracts }) => {
         const totalPositions = positions.length;
         const statusCount = (status: PositionStatus) => positions.filter((p) => p.status === status).length;
         const expiringContracts = contracts.filter((contract) => this.isExpiringSoon(contract.endDate, 30)).length;
         const occupied = statusCount('Occupied');
-        const coverage = stores.length
-          ? Math.round((stores.reduce((acc, s) => acc + s.occupied, 0) / stores.reduce((acc, s) => acc + s.totalPositions, 0)) * 100)
-          : 0;
+        const coverage = totalPositions ? Math.round((occupied / totalPositions) * 100) : 0;
 
         return {
           totalPositions,
@@ -176,18 +203,28 @@ export class DashboardPageComponent implements OnInit {
         const supplierIds = filters.supplier ? [filters.supplier] : suppliers.map((s) => s.id);
         const supplierTotals = supplierIds.map((id) => {
           const supplier = suppliers.find((s) => s.id === id)!;
-          const revenue = contracts
-            .filter((contract) => contract.supplierId === id)
-            .reduce((total, contract) => total + contract.value, supplier.activeRevenue);
-          const activePositions = positions.filter((position) => position.supplier === supplier.name).length;
-          return { ...supplier, activeRevenue: revenue, activePositions };
+          const supplierContracts = contracts.filter((contract) => contract.supplierId === id);
+          const revenue = supplierContracts.reduce((total, contract) => total + contract.value, 0);
+          const activePositions = positions.filter((position) => position.supplierId === id).length;
+          const activeStores = new Set(
+            positions.filter((position) => position.supplierId === id).map((position) => position.retailObjectId)
+          ).size;
+          return {
+            ...supplier,
+            activeRevenue: revenue,
+            activePositions,
+            activeContracts: supplierContracts.length,
+            activeStores
+          };
         });
 
         return [...supplierTotals].sort((a, b) => b.activeRevenue - a.activeRevenue).slice(0, 5);
       })
     );
 
-    this.storeCoverage$ = dashboardState$.pipe(map(({ stores }) => stores.slice(0, 4)));
+    this.storeCoverage$ = dashboardState$.pipe(
+      map(({ storeCoverage }) => storeCoverage.slice(0, 4))
+    );
 
     this.trend$ = dashboardState$.pipe(map((state) => this.buildTrends(state.positions, state.contracts)));
   }
@@ -200,6 +237,36 @@ export class DashboardPageComponent implements OnInit {
 
   onSelectFilter(control: keyof DashboardFiltersForm, value: string | null): void {
     this.filtersForm.patchValue({ [control]: value } as Partial<DashboardFiltersForm>);
+  }
+
+  private buildStoreCoverage(positions: Position[], storeLookup: Map<string, Store>): StoreCoverage[] {
+    const grouped = positions.reduce<Map<string, { id: string; name: string; city: string; total: number; occupied: number }>>(
+      (acc, position) => {
+        const store = storeLookup.get(position.retailObjectId);
+        const entry =
+          acc.get(position.retailObjectId) ||
+          ({
+            id: position.retailObjectId,
+            name: store?.name ?? position.retailObjectName,
+            city: store?.city ?? '',
+            total: 0,
+            occupied: 0
+          } as { id: string; name: string; city: string; total: number; occupied: number });
+
+        entry.total += 1;
+        entry.occupied += position.status === 'Occupied' ? 1 : 0;
+        acc.set(position.retailObjectId, entry);
+        return acc;
+      },
+      new Map()
+    );
+
+    return Array.from(grouped.values()).map((store) => ({
+      id: store.id,
+      name: store.name,
+      city: store.city,
+      occupancy: store.total ? Math.round((store.occupied / store.total) * 100) : 0
+    }));
   }
 
   private buildTrends(positions: Position[], contracts: Contract[]): DashboardTrendPoint[] {
