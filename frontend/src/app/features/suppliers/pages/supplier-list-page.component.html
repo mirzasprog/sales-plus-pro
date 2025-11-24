@@ -4,16 +4,58 @@
     <h1>Partneri i zakup ugovori</h1>
     <p class="muted">Pregled aktivnih ugovora, pokrivenosti po objektima i narednih isteka.</p>
   </div>
-  <form [formGroup]="filterForm" class="filters" novalidate>
-    <label>
-      Pretraga
-      <input type="search" formControlName="search" placeholder="Naziv dobavljača" />
-    </label>
-    <label>
-      Kategorija
-      <input type="text" formControlName="category" placeholder="prehrana, kozmetika..." />
-    </label>
-  </form>
+  <div class="forms">
+    <form [formGroup]="filterForm" class="filters" novalidate>
+      <label>
+        Pretraga
+        <input type="search" formControlName="search" placeholder="Naziv dobavljača" />
+      </label>
+      <label>
+        Kategorija
+        <input type="text" formControlName="category" placeholder="prehrana, kozmetika..." />
+      </label>
+    </form>
+
+    <form [formGroup]="createForm" class="create" novalidate (ngSubmit)="addSupplier()">
+      <div class="field-pair">
+        <label>
+          Naziv dobavljača
+          <input type="text" formControlName="name" placeholder="Novi partner" required />
+        </label>
+        <label>
+          Kategorija
+          <input type="text" formControlName="category" placeholder="prehrana, kozmetika..." required />
+        </label>
+      </div>
+
+      <div class="field-grid">
+        <label>
+          Aktivni ugovori
+          <input type="number" min="0" formControlName="activeContracts" />
+        </label>
+        <label>
+          Aktivni objekti
+          <input type="number" min="0" formControlName="activeStores" />
+        </label>
+        <label>
+          Aktivne pozicije
+          <input type="number" min="0" formControlName="activePositions" />
+        </label>
+        <label>
+          Prihod (EUR)
+          <input type="number" min="0" formControlName="activeRevenue" />
+        </label>
+        <label>
+          Sljedeći isteka
+          <input type="date" formControlName="nextExpiry" />
+        </label>
+      </div>
+
+      <div class="actions">
+        <button type="submit">Dodaj dobavljača</button>
+      </div>
+    </form>
+  </div>
 </section>
 
 <section class="card" *ngIf="suppliers$ | async as suppliers">

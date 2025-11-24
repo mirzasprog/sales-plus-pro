@@ -4,20 +4,78 @@
     <h1>Prodajni objekti i KPI</h1>
     <p class="muted">Praćenje popunjenosti, ugovora i prihoda po objektu.</p>
   </div>
-  <form [formGroup]="filterForm" class="filters" novalidate>
-    <label>
-      Pretraga
-      <input type="search" formControlName="search" placeholder="Naziv ili šifra objekta" />
-    </label>
-    <label>
-      Grad
-      <input type="text" formControlName="city" placeholder="Zagreb, Split..." />
-    </label>
-    <label>
-      Ističe u (dana)
-      <input type="number" min="7" max="180" formControlName="expiringInDays" />
-    </label>
-  </form>
+  <div class="forms">
+    <form [formGroup]="filterForm" class="filters" novalidate>
+      <label>
+        Pretraga
+        <input type="search" formControlName="search" placeholder="Naziv ili šifra objekta" />
+      </label>
+      <label>
+        Grad
+        <input type="text" formControlName="city" placeholder="Zagreb, Split..." />
+      </label>
+      <label>
+        Ističe u (dana)
+        <input type="number" min="7" max="180" formControlName="expiringInDays" />
+      </label>
+    </form>
+
+    <form [formGroup]="createForm" class="create" novalidate (ngSubmit)="addStore()">
+      <div class="field-grid">
+        <label>
+          Šifra objekta
+          <input type="text" formControlName="code" placeholder="OBJ-100" required />
+        </label>
+        <label>
+          Naziv
+          <input type="text" formControlName="name" placeholder="Prodajni centar" required />
+        </label>
+        <label>
+          Ulica
+          <input type="text" formControlName="street" placeholder="Ulica 1" required />
+        </label>
+        <label>
+          Grad
+          <input type="text" formControlName="city" placeholder="Zagreb" required />
+        </label>
+        <label>
+          Pozicija ukupno
+          <input type="number" min="0" formControlName="totalPositions" />
+        </label>
+        <label>
+          Zauzeto
+          <input type="number" min="0" formControlName="occupied" />
+        </label>
+        <label>
+          Slobodno
+          <input type="number" min="0" formControlName="available" />
+        </label>
+        <label>
+          Rezervirano
+          <input type="number" min="0" formControlName="reserved" />
+        </label>
+        <label>
+          Neaktivno
+          <input type="number" min="0" formControlName="inactive" />
+        </label>
+        <label>
+          Ugovori koji ističu
+          <input type="number" min="0" formControlName="expiringContracts" />
+        </label>
+        <label>
+          Prihod (EUR)
+          <input type="number" min="0" formControlName="activeRevenue" />
+        </label>
+        <label>
+          Broj nacrta
+          <input type="number" min="0" formControlName="layoutCount" />
+        </label>
+      </div>
+      <div class="actions">
+        <button type="submit">Dodaj objekat</button>
+      </div>
+    </form>
+  </div>
 </section>
 
 <section class="kpis" *ngIf="summary$ | async as summary">

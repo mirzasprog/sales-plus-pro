@@ -1,5 +1,5 @@
 import { ChangeDetectionStrategy, Component, OnInit } from '@angular/core';
-import { FormBuilder } from '@angular/forms';
+import { FormBuilder, Validators } from '@angular/forms';
 import { Observable } from 'rxjs';
 import { map, startWith, switchMap } from 'rxjs/operators';
 import { PositionService } from '../../../core/services/position.service';
@@ -19,6 +19,17 @@ export class PositionsPageComponent implements OnInit {
     status: [''],
     supplier: [''],
     type: ['']
+  });
+
+  readonly createForm = this.fb.group({
+    name: ['', Validators.required],
+    retailObjectName: ['', Validators.required],
+    positionType: ['', Validators.required],
+    status: ['Available', Validators.required],
+    supplier: [''],
+    widthCm: [100, [Validators.required, Validators.min(1)]],
+    heightCm: [100, [Validators.required, Validators.min(1)]],
+    note: ['']
   });
 
   positions$!: Observable<Position[]>;
@@ -56,5 +67,38 @@ export class PositionsPageComponent implements OnInit {
 
   markInactive(position: Position): void {
     this.notifications.push({ message: `${position.name} označeno kao neaktivno`, type: 'info' });
+  }
+
+  addPosition(): void {
+    if (this.createForm.invalid) {
+      this.createForm.markAllAsTouched();
+      return;
+    }
+
+    const value = this.createForm.value;
+    this.positionService
+      .create({
+        name: value.name ?? '',
+        retailObjectName: value.retailObjectName ?? '',
+        positionType: value.positionType ?? '',
+        status: (value.status as PositionStatus) ?? 'Available',
+        supplier: value.supplier || undefined,
+        widthCm: Number(value.widthCm ?? 0),
+        heightCm: Number(value.heightCm ?? 0),
+        note: value.note || undefined
+      })
+      .subscribe(() => {
+        this.notifications.push({ message: 'Nova pozicija dodana', type: 'success' });
+        this.createForm.reset({
+          name: '',
+          retailObjectName: '',
+          positionType: '',
+          status: 'Available',
+          supplier: '',
+          widthCm: 100,
+          heightCm: 100,
+          note: ''
+        });
+      });
   }
 }
