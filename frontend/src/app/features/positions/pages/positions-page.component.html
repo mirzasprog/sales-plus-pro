@@ -1,14 +1,17 @@
 <section class="positions">
   <div class="panel">
-    <form [formGroup]="filterForm" class="filter">
-      <input type="search" placeholder="Pretraži pozicije..." formControlName="search" />
-      <select formControlName="status">
-        <option value="">Status</option>
-        <option *ngFor="let status of statusOptions" [value]="status">{{ status }}</option>
-      </select>
-      <input type="text" placeholder="Dobavljač" formControlName="supplier" />
-      <input type="text" placeholder="Tip elementa" formControlName="type" />
-    </form>
+    <div class="toolbar">
+      <form [formGroup]="filterForm" class="filter">
+        <input type="search" placeholder="Pretraži pozicije..." formControlName="search" />
+        <select formControlName="status">
+          <option value="">Status</option>
+          <option *ngFor="let status of statusOptions" [value]="status">{{ status }}</option>
+        </select>
+        <input type="text" placeholder="Dobavljač" formControlName="supplier" />
+        <input type="text" placeholder="Tip elementa" formControlName="type" />
+      </form>
+      <button type="button" class="secondary" (click)="exportReport()">Izvezi XLSX</button>
+    </div>
 
     <form [formGroup]="createForm" class="create" novalidate (ngSubmit)="addPosition()">
       <div class="field-grid">
@@ -51,6 +54,61 @@
         <button type="submit">Dodaj poziciju</button>
       </div>
     </form>
+
+    <form
+      *ngIf="editingPosition"
+      [formGroup]="editForm"
+      class="create"
+      novalidate
+      (ngSubmit)="saveEdit()"
+    >
+      <div class="form-header">
+        <div>
+          <p class="eyebrow">Uredi poziciju</p>
+          <h3>{{ editingPosition?.name }}</h3>
+        </div>
+        <button type="button" class="ghost" (click)="cancelEdit()">Zatvori</button>
+      </div>
+      <div class="field-grid">
+        <label>
+          Naziv pozicije
+          <input type="text" formControlName="name" placeholder="End-cap, gondola..." required />
+        </label>
+        <label>
+          Objekat
+          <input type="text" formControlName="retailObjectName" placeholder="Shopping centar" required />
+        </label>
+        <label>
+          Tip pozicije
+          <input type="text" formControlName="positionType" placeholder="Stalak, police" required />
+        </label>
+        <label>
+          Status
+          <select formControlName="status" required>
+            <option *ngFor="let status of statusOptions" [value]="status">{{ status }}</option>
+          </select>
+        </label>
+        <label>
+          Dobavljač
+          <input type="text" formControlName="supplier" placeholder="(opcionalno)" />
+        </label>
+        <label>
+          Širina (cm)
+          <input type="number" min="1" formControlName="widthCm" />
+        </label>
+        <label>
+          Visina (cm)
+          <input type="number" min="1" formControlName="heightCm" />
+        </label>
+        <label class="full">
+          Napomena
+          <textarea rows="2" formControlName="note" placeholder="Dodatni detalji"></textarea>
+        </label>
+      </div>
+      <div class="actions">
+        <button type="submit">Sačuvaj izmjene</button>
+      </div>
+    </form>
   </div>
 
   <div class="position-list" *ngIf="positions$ | async as positions">
@@ -63,7 +121,10 @@
       <p class="muted" *ngIf="position.supplier">Dobavljač: {{ position.supplier }}</p>
       <p class="muted">Dimenzije: {{ position.widthCm }}×{{ position.heightCm }} cm</p>
       <footer>
-        <button type="button" (click)="markInactive(position)">Označi kao neaktivno</button>
+        <div class="button-row">
+          <button type="button" class="ghost" (click)="startEdit(position)">Uredi</button>
+          <button type="button" (click)="markInactive(position)">Označi kao neaktivno</button>
+        </div>
       </footer>
     </article>
   </div>
