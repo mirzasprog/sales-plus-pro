@@ -1,61 +1,84 @@
 import { Injectable } from '@angular/core';
-import { HttpClient } from '@angular/common/http';
-import { BehaviorSubject, map, Observable, tap } from 'rxjs';
-import { v4 as uuidv4 } from 'uuid';
+import { map, Observable } from 'rxjs';
+import { ApiService } from './api.service';
 import { Position } from '../../shared/models/position.model';
 
-const POSITION_KEY = 'sales-plus-positions';
+interface AdditionalPositionDto {
+  id: string;
+  retailObjectId: string;
+  retailObjectName: string;
+  name: string;
+  positionType: string;
+  width: number;
+  height: number;
+  status: string;
+  activeLeases: number;
+  leaseStart?: string | null;
+  leaseEnd?: string | null;
+  supplierId?: string | null;
+  supplierName?: string | null;
+}
 
 @Injectable({ providedIn: 'root' })
 export class PositionService {
-  private readonly positions$ = new BehaviorSubject<Position[]>([]);
-  private initialized = false;
-
-  constructor(private readonly http: HttpClient) {}
+  constructor(private readonly api: ApiService) {}
 
   getAll(): Observable<Position[]> {
-    if (!this.initialized) {
-      this.bootstrap();
-    }
-    return this.positions$.asObservable();
+    return this.api
+      .get<AdditionalPositionDto[]>('additionalpositions')
+      .pipe(map((items) => items.map((item) => this.mapPosition(item))));
   }
 
-  getById(id: string): Observable<Position | undefined> {
-    return this.getAll().pipe(map((items) => items.find((item) => item.id === id)));
+  getById(id: string): Observable<Position> {
+    return this.api.get<AdditionalPositionDto>(`additionalpositions/${id}`).pipe(map((item) => this.mapPosition(item)));
   }
 
   create(payload: Omit<Position, 'id'>): Observable<Position> {
-    const next: Position = { ...payload, id: uuidv4() };
-    this.persist([...this.positions$.value, next]);
-    return this.getById(next.id) as Observable<Position>;
+    return this.api
+      .post<AdditionalPositionDto>('additionalpositions', {
+        retailObjectId: payload.retailObjectId,
+        name: payload.name,
+        positionType: payload.positionType,
+        width: payload.widthCm,
+        height: payload.heightCm
+      })
+      .pipe(map((item) => this.mapPosition(item)));
   }
 
   update(position: Position): Observable<Position> {
-    this.persist(this.positions$.value.map((item) => (item.id === position.id ? position : item)));
-    return this.getById(position.id) as Observable<Position>;
+    return this.api
+      .put<AdditionalPositionDto>(`additionalpositions/${position.id}`, {
+        id: position.id,
+        retailObjectId: position.retailObjectId,
+        name: position.name,
+        positionType: position.positionType,
+        width: position.widthCm,
+        height: position.heightCm,
+        status: position.status
+      })
+      .pipe(map((item) => this.mapPosition(item)));
   }
 
   delete(id: string): Observable<void> {
-    this.persist(this.positions$.value.filter((item) => item.id !== id));
-    return this.positions$.pipe(map(() => void 0));
+    return this.api.delete<void>(`additionalpositions/${id}`);
   }
 
-  private bootstrap(): void {
-    this.initialized = true;
-    const cached = localStorage.getItem(POSITION_KEY);
-    if (cached) {
-      this.positions$.next(JSON.parse(cached) as Position[]);
-      return;
-    }
-
-    this.http
-      .get<Position[]>('assets/mock/positions.json')
-      .pipe(tap((positions) => this.persist(positions)))
-      .subscribe();
-  }
-
-  private persist(positions: Position[]): void {
-    localStorage.setItem(POSITION_KEY, JSON.stringify(positions));
-    this.positions$.next(positions);
+  private mapPosition(dto: AdditionalPositionDto): Position {
+    return {
+      id: dto.id,
+      name: dto.name,
+      positionType: dto.positionType,
+      status: dto.status as Position['status'],
+      retailObjectId: dto.retailObjectId,
+      retailObjectName: dto.retailObjectName,
+      supplierId: dto.supplierId ?? undefined,
+      supplier: dto.supplierName ?? undefined,
+      widthCm: dto.width,
+      heightCm: dto.height,
+      note: undefined,
+      leaseStart: dto.leaseStart ?? undefined,
+      leaseEnd: dto.leaseEnd ?? undefined,
+      activeLeases: dto.activeLeases
+    };
   }
 }

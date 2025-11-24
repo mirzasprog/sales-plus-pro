@@ -31,7 +31,8 @@ public class AdditionalPositionService
     {
         var entities = await _positions.GetAsync(include: query => query
             .Include(x => x.RetailObject)
-            .Include(x => x.Leases), cancellationToken: cancellationToken);
+            .Include(x => x.Leases)
+                .ThenInclude(l => l.Brand), cancellationToken: cancellationToken);
         return entities.Select(e => e.ToDto()).ToList();
     }
 
@@ -39,7 +40,8 @@ public class AdditionalPositionService
     {
         var entity = (await _positions.GetAsync(x => x.Id == id, query => query
             .Include(x => x.RetailObject)
-            .Include(x => x.Leases), cancellationToken)).FirstOrDefault();
+            .Include(x => x.Leases)
+                .ThenInclude(l => l.Brand), cancellationToken)).FirstOrDefault();
         return entity?.ToDto();
     }
 

@@ -12,4 +12,7 @@ export interface Position {
   widthCm: number;
   heightCm: number;
   note?: string;
+  leaseStart?: string | null;
+  leaseEnd?: string | null;
+  activeLeases?: number;
 }
