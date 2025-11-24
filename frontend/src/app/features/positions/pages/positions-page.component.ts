@@ -1,7 +1,7 @@
 import { ChangeDetectionStrategy, Component, OnInit } from '@angular/core';
 import { FormBuilder, Validators } from '@angular/forms';
 import { combineLatest, Observable } from 'rxjs';
-import { map, startWith, switchMap, take } from 'rxjs/operators';
+import { map, shareReplay, startWith, switchMap, take } from 'rxjs/operators';
 import { PositionService } from '../../../core/services/position.service';
 import { NotificationService } from '../../../core/services/notification.service';
 import { ReportExportService } from '../../../core/services/report-export.service';
@@ -57,26 +57,29 @@ export class PositionsPageComponent implements OnInit {
 
   ngOnInit(): void {
     const filters$ = this.filterForm.valueChanges.pipe(startWith(this.filterForm.value));
-    this.positions$ = filters$.pipe(
-      switchMap((filters) =>
-        this.positionService.getAll().pipe(
-          map((positions) =>
-            positions.filter((position) => {
-              const matchText = filters.search
-                ? position.name.toLowerCase().includes(filters.search.toLowerCase()) ||
-                  position.retailObjectName.toLowerCase().includes(filters.search.toLowerCase())
-                : true;
-              const matchStatus = filters.status ? position.status === filters.status : true;
-              const matchSupplier = filters.supplier
-                ? (position.supplier ?? '').toLowerCase().includes(filters.supplier.toLowerCase())
-                : true;
-              const matchType = filters.type ? position.positionType === filters.type : true;
-              return matchText && matchStatus && matchSupplier && matchType;
-            })
+    this.positions$ = filters$
+      .pipe(
+        switchMap((filters) =>
+          this.positionService.getAll().pipe(
+            map((positions) =>
+              positions.filter((position) => {
+                const matchText = filters.search
+                  ? position.name.toLowerCase().includes(filters.search.toLowerCase()) ||
+                    position.retailObjectName.toLowerCase().includes(filters.search.toLowerCase())
+                  : true;
+                const matchStatus = filters.status ? position.status === filters.status : true;
+                const matchSupplier = filters.supplier
+                  ? (position.supplier ?? '').toLowerCase().includes(filters.supplier.toLowerCase())
+                  : true;
+                const matchType = filters.type ? position.positionType === filters.type : true;
+                return matchText && matchStatus && matchSupplier && matchType;
+              })
+            )
           )
-        )
-      )
-    );
+        ),
+        // cache the filtered result so exports use the same dataset shown in the UI
+        shareReplay(1)
+      );
   }
 
   markInactive(position: Position): void {
