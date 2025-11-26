@@ -1,12 +1,13 @@
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Microsoft.IdentityModel.Tokens;
 using RetailPositions.Application.DTOs;
 using RetailPositions.Infrastructure.Identity;
-using RetailPositions.Application.Interfaces;
+using RetailPositions.Domain.Repositories;
 
 namespace RetailPositions.Application.Services;
 
@@ -28,7 +29,7 @@ public class AuthService
 
     public async Task<AuthResponse> LoginAsync(LoginRequest request, CancellationToken cancellationToken = default)
     {
-        var user = (await _users.GetAsync(u => u.Email == request.Email, cancellationToken: cancellationToken)).FirstOrDefault();
+        var user = await _users.Query().FirstOrDefaultAsync(u => u.Email == request.Email, cancellationToken);
         if (user is null || !BCrypt.Net.BCrypt.Verify(request.Password, user.PasswordHash))
         {
             _logger.LogWarning("Invalid login attempt for {Email}", request.Email);

@@ -1,9 +1,9 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using RetailPositions.Application.DTOs;
-using RetailPositions.Application.Interfaces;
 using RetailPositions.Domain.Entities;
 using RetailPositions.Domain.Enums;
+using RetailPositions.Domain.Repositories;
 
 namespace RetailPositions.Application.Services;
 
@@ -132,14 +132,13 @@ public class DashboardService
     {
         var now = DateTime.UtcNow;
 
-        var stores = await _stores.GetAsync(
-            include: query => query
-                // eager-load everything used across KPI calculations
-                .Include(x => x.Layouts)
-                .Include(x => x.AdditionalPositions)
-                    .ThenInclude(p => p.Leases)
-                        .ThenInclude(l => l.Brand),
-            cancellationToken: cancellationToken);
+        var stores = await _stores.Query()
+            // eager-load everything used across KPI calculations
+            .Include(x => x.Layouts)
+            .Include(x => x.AdditionalPositions)
+                .ThenInclude(p => p.Leases)
+                    .ThenInclude(l => l.Brand)
+            .ToListAsync(cancellationToken);
 
         var filteredStores = stores
             .Where(store => string.IsNullOrWhiteSpace(filter.Region) || store.Address.City.Equals(filter.Region, StringComparison.OrdinalIgnoreCase))

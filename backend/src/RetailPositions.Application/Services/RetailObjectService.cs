@@ -1,9 +1,9 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using RetailPositions.Application.DTOs;
-using RetailPositions.Application.Interfaces;
 using RetailPositions.Application.Mapping;
 using RetailPositions.Domain.Entities;
+using RetailPositions.Domain.Repositories;
 
 namespace RetailPositions.Application.Services;
 
@@ -23,17 +23,19 @@ public class RetailObjectService
 
     public async Task<IReadOnlyCollection<RetailObjectDto>> GetAsync(CancellationToken cancellationToken = default)
     {
-        var entities = await _repository.GetAsync(include: query => query
+        var entities = await _repository.Query()
             .Include(x => x.Layouts)
-            .Include(x => x.AdditionalPositions), cancellationToken: cancellationToken);
+            .Include(x => x.AdditionalPositions)
+            .ToListAsync(cancellationToken);
         return entities.Select(e => e.ToDto()).ToList();
     }
 
     public async Task<RetailObjectDto?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default)
     {
-        var entity = (await _repository.GetAsync(x => x.Id == id, query => query
+        var entity = await _repository.Query()
             .Include(o => o.Layouts)
-            .Include(o => o.AdditionalPositions), cancellationToken)).FirstOrDefault();
+            .Include(o => o.AdditionalPositions)
+            .FirstOrDefaultAsync(x => x.Id == id, cancellationToken);
         return entity?.ToDto();
     }
 
@@ -53,7 +55,8 @@ public class RetailObjectService
             CreatedBy = user
         };
 
-        entity = await _repository.AddAsync(entity, cancellationToken);
+        await _repository.AddAsync(entity, cancellationToken);
+        await _repository.SaveChangesAsync(cancellationToken);
         _logger.LogInformation("Retail object {RetailObject} created by {User}", entity.Id, user);
         return entity.ToDto();
     }
@@ -71,13 +74,19 @@ public class RetailObjectService
         entity.ModifiedBy = user;
         entity.ModifiedAtUtc = DateTime.UtcNow;
 
-        await _repository.UpdateAsync(entity, cancellationToken);
+        _repository.Update(entity);
+        await _repository.SaveChangesAsync(cancellationToken);
         _logger.LogInformation("Retail object {RetailObject} updated by {User}", entity.Id, user);
     }
 
     public async Task DeleteAsync(Guid id, string user, CancellationToken cancellationToken = default)
     {
-        await _repository.DeleteAsync(id, cancellationToken);
-        _logger.LogInformation("Retail object {RetailObject} deleted by {User}", id, user);
+        var entity = await _repository.GetByIdAsync(id, cancellationToken);
+        if (entity is not null)
+        {
+            _repository.Remove(entity);
+            await _repository.SaveChangesAsync(cancellationToken);
+            _logger.LogInformation("Retail object {RetailObject} deleted by {User}", id, user);
+        }
     }
 }

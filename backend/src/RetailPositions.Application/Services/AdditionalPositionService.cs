@@ -1,10 +1,10 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using RetailPositions.Application.DTOs;
-using RetailPositions.Application.Interfaces;
 using RetailPositions.Application.Mapping;
 using RetailPositions.Domain.Entities;
 using RetailPositions.Domain.Enums;
+using RetailPositions.Domain.Repositories;
 
 namespace RetailPositions.Application.Services;
 
@@ -29,19 +29,21 @@ public class AdditionalPositionService
 
     public async Task<IReadOnlyCollection<AdditionalPositionDto>> GetAsync(CancellationToken cancellationToken = default)
     {
-        var entities = await _positions.GetAsync(include: query => query
+        var entities = await _positions.Query()
             .Include(x => x.RetailObject)
             .Include(x => x.Leases)
-                .ThenInclude(l => l.Brand), cancellationToken: cancellationToken);
+                .ThenInclude(l => l.Brand)
+            .ToListAsync(cancellationToken);
         return entities.Select(e => e.ToDto()).ToList();
     }
 
     public async Task<AdditionalPositionDto?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default)
     {
-        var entity = (await _positions.GetAsync(x => x.Id == id, query => query
+        var entity = await _positions.Query()
             .Include(x => x.RetailObject)
             .Include(x => x.Leases)
-                .ThenInclude(l => l.Brand), cancellationToken)).FirstOrDefault();
+                .ThenInclude(l => l.Brand)
+            .FirstOrDefaultAsync(x => x.Id == id, cancellationToken);
         return entity?.ToDto();
     }
 
@@ -57,8 +59,9 @@ public class AdditionalPositionService
             CreatedBy = user
         };
 
-        entity = await _positions.AddAsync(entity, cancellationToken);
+        await _positions.AddAsync(entity, cancellationToken);
         await TrackStatusChange(entity, PositionStatus.Available, "Initial creation", user, cancellationToken);
+        await _positions.SaveChangesAsync(cancellationToken);
         return entity.ToDto();
     }
 
@@ -80,14 +83,20 @@ public class AdditionalPositionService
             await TrackStatusChange(entity, request.Status, "Status updated", user, cancellationToken);
         }
 
-        await _positions.UpdateAsync(entity, cancellationToken);
+        _positions.Update(entity);
+        await _positions.SaveChangesAsync(cancellationToken);
         _logger.LogInformation("Additional position {Position} updated by {User}", entity.Id, user);
     }
 
     public async Task DeleteAsync(Guid id, string user, CancellationToken cancellationToken = default)
     {
-        await _positions.DeleteAsync(id, cancellationToken);
-        _logger.LogInformation("Additional position {Position} deleted by {User}", id, user);
+        var entity = await _positions.GetByIdAsync(id, cancellationToken);
+        if (entity is not null)
+        {
+            _positions.Remove(entity);
+            await _positions.SaveChangesAsync(cancellationToken);
+            _logger.LogInformation("Additional position {Position} deleted by {User}", id, user);
+        }
     }
 
     private async Task TrackStatusChange(AdditionalPosition entity, PositionStatus status, string comment, string user, CancellationToken cancellationToken)

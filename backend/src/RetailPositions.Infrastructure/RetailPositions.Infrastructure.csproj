@@ -16,6 +16,5 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="../RetailPositions.Domain/RetailPositions.Domain.csproj" />
-    <ProjectReference Include="../RetailPositions.Application/RetailPositions.Application.csproj" />
   </ItemGroup>
 </Project>

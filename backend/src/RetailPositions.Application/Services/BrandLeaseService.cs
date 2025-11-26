@@ -1,10 +1,10 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using RetailPositions.Application.DTOs;
-using RetailPositions.Application.Interfaces;
 using RetailPositions.Application.Mapping;
 using RetailPositions.Domain.Entities;
 using RetailPositions.Domain.Enums;
+using RetailPositions.Domain.Repositories;
 
 namespace RetailPositions.Application.Services;
 
@@ -29,17 +29,19 @@ public class BrandLeaseService
 
     public async Task<IReadOnlyCollection<BrandLeaseDto>> GetAsync(CancellationToken cancellationToken = default)
     {
-        var entities = await _leases.GetAsync(include: query => query
+        var entities = await _leases.Query()
             .Include(x => x.Brand)
-            .Include(x => x.AdditionalPosition), cancellationToken: cancellationToken);
+            .Include(x => x.AdditionalPosition)
+            .ToListAsync(cancellationToken);
         return entities.Select(e => e.ToDto()).ToList();
     }
 
     public async Task<BrandLeaseDto?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default)
     {
-        var entity = (await _leases.GetAsync(x => x.Id == id, query => query
+        var entity = await _leases.Query()
             .Include(x => x.Brand)
-            .Include(x => x.AdditionalPosition), cancellationToken)).FirstOrDefault();
+            .Include(x => x.AdditionalPosition)
+            .FirstOrDefaultAsync(x => x.Id == id, cancellationToken);
         return entity?.ToDto();
     }
 
@@ -62,8 +64,9 @@ public class BrandLeaseService
             CreatedBy = user
         };
 
-        entity = await _leases.AddAsync(entity, cancellationToken);
+        await _leases.AddAsync(entity, cancellationToken);
         await SyncPositionStatus(entity, cancellationToken);
+        await _leases.SaveChangesAsync(cancellationToken);
         return entity.ToDto();
     }
 
@@ -84,8 +87,9 @@ public class BrandLeaseService
         entity.ModifiedBy = user;
         entity.ModifiedAtUtc = DateTime.UtcNow;
 
-        await _leases.UpdateAsync(entity, cancellationToken);
         await SyncPositionStatus(entity, cancellationToken);
+        _leases.Update(entity);
+        await _leases.SaveChangesAsync(cancellationToken);
         _logger.LogInformation("Lease {Lease} updated by {User}", entity.Id, user);
     }
 
@@ -94,8 +98,9 @@ public class BrandLeaseService
         var entity = await _leases.GetByIdAsync(id, cancellationToken);
         if (entity is not null)
         {
-            await _leases.DeleteAsync(id, cancellationToken);
             await SyncPositionStatus(entity, cancellationToken, deleted: true);
+            _leases.Remove(entity);
+            await _leases.SaveChangesAsync(cancellationToken);
             _logger.LogInformation("Lease {Lease} deleted by {User}", id, user);
         }
     }
@@ -123,6 +128,6 @@ public class BrandLeaseService
         }
 
         position.Status = newStatus;
-        await _positions.UpdateAsync(position, cancellationToken);
+        _positions.Update(position);
     }
 }
