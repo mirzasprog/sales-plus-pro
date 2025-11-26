@@ -1,9 +1,9 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using RetailPositions.Application.DTOs;
-using RetailPositions.Application.Interfaces;
 using RetailPositions.Application.Mapping;
 using RetailPositions.Domain.Entities;
+using RetailPositions.Domain.Repositories;
 
 namespace RetailPositions.Application.Services;
 
@@ -23,13 +23,17 @@ public class BrandService
 
     public async Task<IReadOnlyCollection<BrandDto>> GetAsync(CancellationToken cancellationToken = default)
     {
-        var entities = await _brands.GetAsync(include: query => query.Include(x => x.Leases), cancellationToken: cancellationToken);
+        var entities = await _brands.Query()
+            .Include(x => x.Leases)
+            .ToListAsync(cancellationToken);
         return entities.Select(e => e.ToDto()).ToList();
     }
 
     public async Task<BrandDto?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default)
     {
-        var entity = (await _brands.GetAsync(x => x.Id == id, query => query.Include(x => x.Leases), cancellationToken)).FirstOrDefault();
+        var entity = await _brands.Query()
+            .Include(x => x.Leases)
+            .FirstOrDefaultAsync(x => x.Id == id, cancellationToken);
         return entity?.ToDto();
     }
 
@@ -42,7 +46,8 @@ public class BrandService
             CreatedBy = user
         };
 
-        entity = await _brands.AddAsync(entity, cancellationToken);
+        await _brands.AddAsync(entity, cancellationToken);
+        await _brands.SaveChangesAsync(cancellationToken);
         _logger.LogInformation("Brand {Brand} created by {User}", entity.Id, user);
         return entity.ToDto();
     }
@@ -56,13 +61,19 @@ public class BrandService
         entity.ModifiedBy = user;
         entity.ModifiedAtUtc = DateTime.UtcNow;
 
-        await _brands.UpdateAsync(entity, cancellationToken);
+        _brands.Update(entity);
+        await _brands.SaveChangesAsync(cancellationToken);
         _logger.LogInformation("Brand {Brand} updated by {User}", entity.Id, user);
     }
 
     public async Task DeleteAsync(Guid id, string user, CancellationToken cancellationToken = default)
     {
-        await _brands.DeleteAsync(id, cancellationToken);
-        _logger.LogInformation("Brand {Brand} deleted by {User}", id, user);
+        var entity = await _brands.GetByIdAsync(id, cancellationToken);
+        if (entity is not null)
+        {
+            _brands.Remove(entity);
+            await _brands.SaveChangesAsync(cancellationToken);
+            _logger.LogInformation("Brand {Brand} deleted by {User}", id, user);
+        }
     }
 }
